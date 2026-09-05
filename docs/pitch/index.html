@@ -3,33 +3,27 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>h5i Pitch Deck: A Secure, Auditable Browser for AI Agents</title>
-<meta name="description" content="The h5i pitch deck: a secure, auditable browser for AI agents whose every request is policy-checked and recorded before the bytes move, or refused.">
+<title>h5i Pitch Deck: A Security-First Browser for AI Agents</title>
+<meta name="description" content="A pure-Rust browser for AI agents: browse and automate, inspect and test HTTP traffic, and control access with network policies, auditing, and configurable sandboxing.">
 <meta name="keywords" content="h5i pitch, browser for ai agents, auditable browser, agentic browsing, fail-closed request log, network egress allowlist, ai agent sandbox, landlock seccomp sandbox, microvm isolation, claude code, codex, agent containment">
 <meta name="author" content="h5i-dev">
 <meta name="theme-color" content="#D21C1C">
 <meta name="color-scheme" content="dark">
 <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
 <link rel="canonical" href="https://h5i.dev/pitch/">
-<script>
-  // Smartphones get the PDF version: the deck's fixed 16:9 slides fight a
-  // phone viewport. `?deck` opts back into the interactive deck.
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if (isMobile && !new URLSearchParams(location.search).has('deck'))
-    location.replace('pdf/');
-</script>
-<link rel="icon" type="image/png" href="/_static/logo.png">
-<link rel="apple-touch-icon" href="/_static/logo.png">
+
+<link rel="icon" type="image/png" href="https://h5i.dev/_static/logo.png">
+<link rel="apple-touch-icon" href="https://h5i.dev/_static/logo.png">
 
 <script type="application/ld+json">
-{"@context": "https://schema.org", "@type": "PresentationDigitalDocument", "name": "h5i Pitch Deck", "headline": "h5i Pitch Deck: A Secure, Auditable Browser for AI Agents", "description": "A secure, auditable browser for AI agents: the engine is the HTTP client, so every request is policy-checked and written down before the bytes move and a fetch that cannot be recorded is refused. The session runs on the host by default and can be placed inside a disposable box without changing a verb, with host files and credentials outside it.", "url": "https://h5i.dev/pitch/", "inLanguage": "en", "author": {"@type": "Organization", "name": "h5i-dev", "url": "https://github.com/h5i-dev/h5i"}, "publisher": {"@type": "Organization", "name": "h5i", "logo": {"@type": "ImageObject", "url": "https://h5i.dev/_static/logo.png"}}, "about": {"@id": "https://h5i.dev/#app"}}
+{"@context": "https://schema.org", "@type": "PresentationDigitalDocument", "name": "h5i Pitch Deck", "headline": "h5i Pitch Deck: A Security-First Browser for AI Agents", "description": "A pure-Rust browser for AI agents: browse and automate, inspect and test HTTP traffic, and control access with network policies, auditing, and configurable sandboxing.", "url": "https://h5i.dev/pitch/", "inLanguage": "en", "author": {"@type": "Organization", "name": "h5i-dev", "url": "https://github.com/h5i-dev/h5i"}, "publisher": {"@type": "Organization", "name": "h5i", "logo": {"@type": "ImageObject", "url": "https://h5i.dev/_static/logo.png"}}, "about": {"@id": "https://h5i.dev/#app"}}
 </script>
 
 <!-- Open Graph -->
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="h5i">
-<meta property="og:title" content="h5i Pitch Deck: A Secure, Auditable Browser for AI Agents">
-<meta property="og:description" content="A secure, auditable browser for AI agents. Every request is policy-checked and written down before the bytes move, and a fetch that cannot be recorded is refused. Place the session in a disposable box and the boundary is witnessed from outside it.">
+<meta property="og:title" content="h5i Pitch Deck: A Security-First Browser for AI Agents">
+<meta property="og:description" content="A pure-Rust browser for AI agents: browse and automate, inspect and test HTTP traffic, and control access with network policies, auditing, and configurable sandboxing.">
 <meta property="og:url" content="https://h5i.dev/pitch/">
 <meta property="og:image" content="https://h5i.dev/_static/sandbox-ui-demo.png">
 <meta property="og:image:alt" content="The h5i box console: every box with its tier, status and one signal on the left, and the refused-egress finding, the receipt flight recorder and the enforced policy on the right">
@@ -37,8 +31,8 @@
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="h5i Pitch Deck: A Secure, Auditable Browser for AI Agents">
-<meta name="twitter:description" content="A secure, auditable browser for AI agents: a request log written before the bytes move, a disposable box to place the session in, and a reviewable patch coming out.">
+<meta name="twitter:title" content="h5i Pitch Deck: A Security-First Browser for AI Agents">
+<meta name="twitter:description" content="A pure-Rust browser for AI agents: browse and automate, inspect and test HTTP traffic, and control access with network policies, auditing, and configurable sandboxing.">
 <meta name="twitter:image" content="https://h5i.dev/_static/sandbox-ui-demo.png">
 <meta name="twitter:image:alt" content="The h5i box console: every box with its tier, status and one signal on the left, and the refused-egress finding, the receipt flight recorder and the enforced policy on the right">
 
@@ -875,14 +869,39 @@
   <script type="application/ld+json">
   {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://h5i.dev/"}, {"@type": "ListItem", "position": 2, "name": "Pitch Deck", "item": "https://h5i.dev/pitch/"}]}
   </script>
-  <link rel="stylesheet" href="/_static/highlight.css?v=45984d5155">
+  <style>/* ════════════════════════════════════════════════════════
+   h5i — tiny syntax highlighter theme
+   Tokens are colored with the site's monochrome + red palette
+   (vars come from each page's :root; literal fallbacks keep it
+   working on any page that doesn't define one). Layout/base
+   styling of <pre>/<code>/.terminal is intentionally untouched —
+   these rules only set token color + emphasis.
+   ════════════════════════════════════════════════════════ */
+.hl-cmd      { color: var(--ink, #fff); font-weight: 600; }
+.hl-prompt   { color: var(--red-text, #ff6258); font-weight: 700; }
+.hl-flag     { color: var(--cyan, #a9bdd0); }
+.hl-var      { color: var(--cyan, #a9bdd0); }
+.hl-string   { color: var(--green, #62c98c); }
+.hl-comment  { color: var(--text-faint, #6b6b75); font-style: italic; }
+.hl-op       { color: var(--text-faint, #6b6b75); }
+.hl-punct    { color: var(--text-faint, #6b6b75); }
+.hl-num      { color: var(--yellow, #d6a94e); }
+.hl-bool     { color: var(--yellow, #d6a94e); }
+.hl-key      { color: var(--red-text, #ff6258); }
+.hl-section  { color: var(--red-text, #ff6258); font-weight: 700; }
+</style>
+<style>
+.sbx .sb-box::before { display: none; }
+.rt-col { min-width: 0; }
+.rt-term pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>
 </head>
 <body>
 
 <div class="bg-grid"></div>
 
 <div class="export-group">
-  <a class="export-btn" href="pdf/">PDF version</a>
+  <a class="export-btn" href="https://h5i.dev/pitch/">h5i.dev / pitch</a>
   <button class="export-btn" onclick="window.print()">⬇ Export PDF</button>
 </div>
 <button class="nav-arrow prev" onclick="changeSlide(-1)">‹</button>
@@ -898,12 +917,12 @@
 <div class="slide active" style="gap:28px;">
   <div class="hero-glow"></div>
   <div style="width:100%;max-width:1000px;">
-    <div class="hero-badge">Run more browser tasks · Control where agents can go · Review what they accessed</div>
-    <h1 style="font-size:clamp(2.6rem,5.4vw,4.4rem);">A Secure, Auditable Browser<br><span class="shine-text">for AI Agents</span></h1>
+    <div class="hero-badge">Browse and automate · Test web apps · Control and audit agent access</div>
+    <h1 style="font-size:clamp(2.6rem,5.4vw,4.4rem);">A Security-First Browser<br><span class="shine-text">for AI Agents</span></h1>
     <ul class="lede" style="list-style:none;max-width:1040px;margin:28px 0 0;padding:0;font-size:clamp(1.35rem,2.5vw,1.95rem);line-height:1.4;display:flex;flex-direction:column;gap:18px;">
-      <li style="position:relative;padding-left:1.5em;"><span style="position:absolute;left:0;color:var(--red-text);">&#9656;</span><span class="cyan">Run more browser tasks in parallel.</span> ~3&times; faster reads with ~86% less peak memory.</li>
-      <li style="position:relative;padding-left:1.5em;"><span style="position:absolute;left:0;color:var(--red-text);">&#9656;</span><span class="cyan">Start sandboxed by default.</span> Isolate the browser or the agent&#39;s entire workflow inside a container or microVM.</li>
-      <li style="position:relative;padding-left:1.5em;"><span style="position:absolute;left:0;color:var(--red-text);">&#9656;</span><span class="cyan">Review exactly what happened.</span> Every browser action and network request is recorded.</li>
+      <li style="position:relative;padding-left:1.5em;"><span style="position:absolute;left:0;color:var(--red-text);">&#9656;</span><span class="cyan">Browse, scrape, and automate.</span> Pure Rust. No Chromium or V8.</li>
+      <li style="position:relative;padding-left:1.5em;"><span style="position:absolute;left:0;color:var(--red-text);">&#9656;</span><span class="cyan">Protect agents from the web.</span> Network policies, sandboxing, and reviewable sessions.</li>
+      <li style="position:relative;padding-left:1.5em;"><span style="position:absolute;left:0;color:var(--red-text);">&#9656;</span><span class="cyan">Use agents to test the web.</span> Capture, edit, replay, and compare HTTP traffic.</li>
     </ul>
     <p class="mono" style="margin-top:30px;font-size:clamp(1rem,1.8vw,1.3rem);color:var(--text-dim);">&#9733; <span style="color:var(--ink);">600+ GitHub stars</span> &#183; Apache 2.0 &#183; <span class="cyan">local-first, no hosted service</span></p>
   </div>
@@ -915,15 +934,15 @@
 <div class="slide" style="gap:24px;">
   <div style="width:100%;max-width:980px;">
     <div class="section-tag">Why now</div>
-    <h2>Web browsing for agents is<br><span class="red">too heavy</span> and <span class="red">too risky</span>.</h2>
+    <h2>Giving agents a browser changes<br><span class="red">both sides of web security</span>.</h2>
     <div class="g2" style="margin-top:36px;align-items:stretch;gap:24px;">
       <div class="card" style="border-color:var(--border-red);background:rgba(224,36,27,0.04);">
         <span class="pill red">today</span>
         <h3 style="margin-top:14px;font-size:clamp(1.5rem,2.6vw,2.1rem);">Browsers built for people</h3>
         <ul class="feat-desc" style="list-style:none;margin:14px 0 0;padding:0;font-size:clamp(1.05rem,1.8vw,1.3rem);line-height:1.45;display:flex;flex-direction:column;gap:10px;">
-          <li style="position:relative;padding-left:1.5em;"><span style="position:absolute;left:0;color:var(--red-text);">&#10005;</span>Browsers designed for people are too complex, slow, and memory-intensive</li>
+          <li style="position:relative;padding-left:1.5em;"><span style="position:absolute;left:0;color:var(--red-text);">&#10005;</span>Browsers designed for people are too slow and memory-intensive for agent tasks</li>
           <li style="position:relative;padding-left:1.5em;"><span style="position:absolute;left:0;color:var(--red-text);">&#10005;</span>Malicious pages can manipulate agents into harmful actions, such as leaking credentials</li>
-          <li style="position:relative;padding-left:1.5em;"><span style="position:absolute;left:0;color:var(--red-text);">&#10005;</span>Existing browser tools do not provide a clear, complete audit trail of what the agent did</li>
+          <li style="position:relative;padding-left:1.5em;"><span style="position:absolute;left:0;color:var(--red-text);">&#10005;</span>HTTP visibility and request manipulation are needed for red teaming</li>
         </ul>
       </div>
       <div class="card" style="border-color:rgba(98,201,140,0.3);background:rgba(98,201,140,0.035);">
@@ -932,7 +951,7 @@
         <ul class="feat-desc" style="list-style:none;margin:14px 0 0;padding:0;font-size:clamp(1.05rem,1.8vw,1.3rem);line-height:1.45;display:flex;flex-direction:column;gap:10px;">
           <li style="position:relative;padding-left:1.5em;"><span style="position:absolute;left:0;color:var(--green);">&#10003;</span>~3&times; faster reads with ~86% less peak memory on simple websites</li>
           <li style="position:relative;padding-left:1.5em;"><span style="position:absolute;left:0;color:var(--green);">&#10003;</span>Sandboxing and network rules limit what a manipulated agent can access</li>
-          <li style="position:relative;padding-left:1.5em;"><span style="position:absolute;left:0;color:var(--green);">&#10003;</span>Every browser action and network request is recorded in one reviewable timeline</li>
+          <li style="position:relative;padding-left:1.5em;"><span style="position:absolute;left:0;color:var(--green);">&#10003;</span>Inspect, edit, replay, and compare traffic through the same browser</li>
         </ul>
       </div>
     </div>
@@ -945,38 +964,38 @@
 <div class="slide" style="gap:22px;">
   <div style="width:100%;max-width:1180px;">
     <div class="section-tag">The problem</div>
-    <h2>Browsers built for people are<br><span class="red">a poor fit for agents</span>.</h2>
+    <h2>Security for AI and AI for Security<br><span class="red">both need a better browser.</span></h2>
 
     <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:18px;margin-top:22px;align-items:stretch;">
       <div class="metric" style="flex:1 1 320px;max-width:370px;align-items:flex-start;text-align:left;gap:12px;">
-        <span class="pill red">the engine</span>
-        <span class="mv" style="font-size:1.35rem;line-height:1.15;">Human features waste compute</span>
-        <span class="ml" style="font-size:1.02rem;">Tabs, extensions, device sync, and a full interactive UI consume memory and CPU.</span>
+        <span class="pill red">speed</span>
+        <span class="mv" style="font-size:1.35rem;line-height:1.15;">Too slow for routine agent tasks</span>
+        <span class="ml" style="font-size:1.02rem;">Agents spend time waiting for pages during repeated reads and scraping.</span>
       </div>
       <div class="metric" style="flex:1 1 320px;max-width:370px;align-items:flex-start;text-align:left;gap:12px;">
-        <span class="pill red">the output</span>
-        <span class="mv" style="font-size:1.35rem;line-height:1.15;">Agents need structured content</span>
-        <span class="ml" style="font-size:1.02rem;">Pixels and raw HTML add noise and tokens when the agent needs a compact info.</span>
+        <span class="pill red">attack</span>
+        <span class="mv" style="font-size:1.35rem;line-height:1.15;">Red teaming needs HTTP visibility</span>
+        <span class="ml" style="font-size:1.02rem;">Request headers and bodies are needed to investigate vulnerabilities.</span>
       </div>
       <div class="metric" style="flex:1 1 320px;max-width:370px;align-items:flex-start;text-align:left;gap:12px;">
-        <span class="pill red">the page</span>
+        <span class="pill red">defense</span>
         <span class="mv" style="font-size:1.35rem;line-height:1.15;">Every page is untrusted input</span>
         <span class="ml" style="font-size:1.02rem;">Prompt injections can manipulate an agent into harmful actions.</span>
       </div>
       <div class="metric" style="flex:1 1 320px;max-width:370px;align-items:flex-start;text-align:left;gap:12px;">
-        <span class="pill red">the profile</span>
-        <span class="mv" style="font-size:1.35rem;line-height:1.15;">A personal browser carries personal access</span>
-        <span class="ml" style="font-size:1.02rem;">Cookies, logged-in accounts, local services, and private networks.</span>
+        <span class="pill red">speed</span>
+        <span class="mv" style="font-size:1.35rem;line-height:1.15;">Memory limits parallel sessions</span>
+        <span class="ml" style="font-size:1.02rem;">Heavy browsers reduce how many agent tasks can run on one machine.</span>
       </div>
       <div class="metric" style="flex:1 1 320px;max-width:370px;align-items:flex-start;text-align:left;gap:12px;">
-        <span class="pill red">the record</span>
-        <span class="mv" style="font-size:1.35rem;line-height:1.15;">Automation logs are difficult to audit</span>
-        <span class="ml" style="font-size:1.02rem;">Clicks alone do not show every request, blocked connection, or session ending.</span>
+        <span class="pill red">attack</span>
+        <span class="mv" style="font-size:1.35rem;line-height:1.15;">Testing needs request manipulation</span>
+        <span class="ml" style="font-size:1.02rem;">Agents need to edit and replay requests to verify an attack.</span>
       </div>
       <div class="metric" style="flex:1 1 320px;max-width:370px;align-items:flex-start;text-align:left;gap:12px;">
-        <span class="pill red">app testing</span>
-        <span class="mv" style="font-size:1.35rem;line-height:1.15;">Untrusted code runs directly on your machine</span>
-        <span class="ml" style="font-size:1.02rem;">Web Apps might might maliciously behave in the unprotected host.</span>
+        <span class="pill red">defense</span>
+        <span class="mv" style="font-size:1.35rem;line-height:1.15;">Browser access carries authority</span>
+        <span class="ml" style="font-size:1.02rem;">Logged-in sessions and internal services can be misused without access limits.</span>
       </div>
     </div>
   </div>
@@ -988,38 +1007,38 @@
 <div class="slide" style="gap:22px;">
   <div style="width:100%;max-width:1180px;">
     <div class="section-tag">The solution</div>
-    <h2>h5i is built for <span class="red">agent workloads<br>and agent risks</span>.</h2>
+    <h2>Protect agents from the web.<br><span class="red">Use agents to test the web.</span></h2>
 
     <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:18px;margin-top:22px;align-items:stretch;">
       <div class="metric" style="flex:1 1 320px;max-width:370px;align-items:flex-start;text-align:left;gap:12px;border-color:rgba(98,201,140,0.3);background:rgba(98,201,140,0.035);">
-        <span class="pill green">the engine</span>
-        <span class="mv" style="font-size:1.35rem;line-height:1.15;color:var(--green);">A lightweight engine for agent tasks</span>
-        <span class="ml" style="font-size:1.02rem;">~3&times; faster reads with ~86% less peak memory on simple websites.</span>
+        <span class="pill green">speed</span>
+        <span class="mv" style="font-size:1.35rem;line-height:1.15;color:var(--green);">~3&times; faster page reads</span>
+        <span class="ml" style="font-size:1.02rem;">Compared with headless Chromium in our benchmarks on simple websites.</span>
       </div>
       <div class="metric" style="flex:1 1 320px;max-width:370px;align-items:flex-start;text-align:left;gap:12px;border-color:rgba(98,201,140,0.3);background:rgba(98,201,140,0.035);">
-        <span class="pill green">the output</span>
-        <span class="mv" style="font-size:1.35rem;line-height:1.15;color:var(--green);">Structured pages instead of visual noise</span>
-        <span class="ml" style="font-size:1.02rem;">Agents receive compact outlines with <span class="mono">@ref</span> handles.</span>
+        <span class="pill green">attack</span>
+        <span class="mv" style="font-size:1.35rem;line-height:1.15;color:var(--green);">Inspect browser HTTP traffic</span>
+        <span class="ml" style="font-size:1.02rem;">Capture requests and responses, including headers and bodies.</span>
       </div>
       <div class="metric" style="flex:1 1 320px;max-width:370px;align-items:flex-start;text-align:left;gap:12px;border-color:rgba(98,201,140,0.3);background:rgba(98,201,140,0.035);">
-        <span class="pill green">the page</span>
+        <span class="pill green">defense</span>
         <span class="mv" style="font-size:1.35rem;line-height:1.15;color:var(--green);">Limit the damage of prompt injection</span>
-        <span class="ml" style="font-size:1.02rem;">Page content is marked as untrusted, reducing the risk of manipulated agents.</span>
+        <span class="ml" style="font-size:1.02rem;">Mark page content as untrusted; use policies and isolation to limit its impact.</span>
       </div>
       <div class="metric" style="flex:1 1 320px;max-width:370px;align-items:flex-start;text-align:left;gap:12px;border-color:rgba(98,201,140,0.3);background:rgba(98,201,140,0.035);">
-        <span class="pill green">the profile</span>
-        <span class="mv" style="font-size:1.35rem;line-height:1.15;color:var(--green);">Every session starts with a fresh profile</span>
-        <span class="ml" style="font-size:1.02rem;">No inherited cookies or logged-in accounts. Credentials can be brokered.</span>
+        <span class="pill green">speed</span>
+        <span class="mv" style="font-size:1.35rem;line-height:1.15;color:var(--green);">~86% less peak memory</span>
+        <span class="ml" style="font-size:1.02rem;">Compared with headless Chromium in the same simple-site benchmarks.</span>
       </div>
       <div class="metric" style="flex:1 1 320px;max-width:370px;align-items:flex-start;text-align:left;gap:12px;border-color:rgba(98,201,140,0.3);background:rgba(98,201,140,0.035);">
-        <span class="pill green">the record</span>
-        <span class="mv" style="font-size:1.35rem;line-height:1.15;color:var(--green);">Every action and request is reviewable</span>
-        <span class="ml" style="font-size:1.02rem;">Allowed and denied requests, crashes, and session endings are recorded.</span>
+        <span class="pill green">attack</span>
+        <span class="mv" style="font-size:1.35rem;line-height:1.15;color:var(--green);">Edit, replay, and compare</span>
+        <span class="ml" style="font-size:1.02rem;">Modify captured requests and verify responses without a separate MITM proxy or repeater.</span>
       </div>
       <div class="metric" style="flex:1 1 320px;max-width:370px;align-items:flex-start;text-align:left;gap:12px;border-color:rgba(98,201,140,0.3);background:rgba(98,201,140,0.035);">
-        <span class="pill green">app testing</span>
-        <span class="mv" style="font-size:1.35rem;line-height:1.15;color:var(--green);">Sandbox the entire web workflow</span>
-        <span class="ml" style="font-size:1.02rem;">Place the agent, browser, and dependencies inside one sandbox.</span>
+        <span class="pill green">defense</span>
+        <span class="mv" style="font-size:1.35rem;line-height:1.15;color:var(--green);">Control and audit agent access</span>
+        <span class="ml" style="font-size:1.02rem;">Restrict destinations, isolate credentials, and record allowed and denied requests.</span>
       </div>
     </div>
   </div>
@@ -1031,7 +1050,7 @@
 <div class="slide" style="gap:18px;">
   <div style="width:100%;max-width:1080px;">
     <div class="section-tag">The browser</div>
-    <h2>Run more browser sessions<br><span class="red">without losing control</span>.</h2>
+    <h2>Browse, scrape, and automate.<br><span class="red">Sandbox the workflow.</span></h2>
 
     <div class="rt" style="margin-top:22px;" role="img" aria-label="Diagram: a loaded web page full of layout, images and ads enters the h5i browser on the left; a three-line outline with @ref handles comes out on the right. The agent drives the same session back through h5i.">
       <div class="rt-col">
@@ -1066,7 +1085,7 @@
       <div class="rt-mid">
         <div class="rt-ar"><span class="ac">&#9656;&#9656;&#9656;</span><span class="al">page bytes</span></div>
         <div class="bnode core" style="margin:8px 0;">
-          <span class="bt">one local binary</span>
+          <span class="bt">policy-controlled · sandboxable</span>
           <span class="bn">h5i browser</span>
         </div>
         <div class="rt-ar"><span class="ac">&#9656;&#9656;&#9656;</span><span class="al">outline, not pixels</span></div>
@@ -1084,8 +1103,10 @@
 <span class="t-prompt">$</span> <span class="t-cmd">h5i browser snapshot</span>
   <span class="t-ai">@e1</span> <span class="t-out">heading "Documentation"</span>
   <span class="t-ai">@e2</span> <span class="t-out">link "Getting started"</span>
-  <span class="t-ai">@e3</span> <span class="t-out">searchbox "Search"</span>
-<span class="t-prompt">$</span> <span class="t-cmd">h5i browser click @e2</span> <span class="t-pass">&#10003;</span></pre></div>
+<span class="t-prompt">$</span> <span class="t-cmd">h5i browser click @e2</span> <span class="t-pass">&#10003;</span>
+
+<span class="t-prompt">$</span> <span class="t-cmd">h5i box --profile custom-sandbox --name custom-sandbox</span>
+<span class="t-prompt">$</span> <span class="t-cmd">h5i browser open https://docs.rs --in custom-sandbox</span></pre></div>
           </div>
         </div>
       </div>
@@ -1093,66 +1114,66 @@
 
     <div class="rt-back">
       <span class="ln"></span>
-      <span class="lb">&#9666; the agent drives the same session &#183; open &#183; click &#183; type</span>
+      <span class="lb">* Simple-site benchmarks vs headless Chromium · browser-only or full-workflow isolation</span>
       <span class="ln r"></span>
     </div>
 
     <div class="g4" style="margin-top:16px;">
-      <div class="metric" style="padding:16px 14px;gap:4px;"><span class="mv" style="font-size:2.1rem;">~3&times;</span><span class="ml" style="font-size:0.88rem;">faster reads</span></div>
-      <div class="metric" style="padding:16px 14px;gap:4px;"><span class="mv" style="font-size:2.1rem;">~86%</span><span class="ml" style="font-size:0.88rem;">less peak memory</span></div>
-      <div class="metric" style="padding:16px 14px;gap:4px;"><span class="mv" style="font-size:2.1rem;">300k+</span><span class="ml" style="font-size:0.88rem;">web standards tests passed</span></div>
+      <div class="metric" style="padding:16px 14px;gap:4px;"><span class="mv" style="font-size:2.1rem;">~3&times;</span><span class="ml" style="font-size:0.88rem;">faster reads*</span></div>
+      <div class="metric" style="padding:16px 14px;gap:4px;"><span class="mv" style="font-size:2.1rem;">~86%</span><span class="ml" style="font-size:0.88rem;">less peak memory*</span></div>
+      <div class="metric" style="padding:16px 14px;gap:4px;"><span class="mv" style="font-size:1.75rem;">Sandboxed</span><span class="ml" style="font-size:0.88rem;">browser or agent + browser</span></div>
       <div class="metric" style="padding:16px 14px;gap:4px;"><span class="mv" style="font-size:1.75rem;">Auditable</span><span class="ml" style="font-size:0.88rem;">every action is recorded</span></div>
     </div>
   </div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════
-     SLIDE 6 — The sandbox (the workflow loop inside one boundary)
+     SLIDE 6 — Websec (the HTTP test loop in one browser)
 ══════════════════════════════════════════════════════════════ -->
 <div class="slide" style="gap:16px;">
   <div style="width:100%;max-width:1120px;">
-    <div class="section-tag">The sandbox</div>
-    <h2>Put the agent&#39;s entire workflow<br>inside <span class="red">one boundary</span>.</h2>
-    <p class="lede" style="max-width:960px;">Turn agent permission prompts off: the box is the permission. Writes stay in <code>$WORK</code>, egress is allowlisted, every denial is recorded, and an everyday box is ready in under 200&nbsp;ms.</p>
+    <div class="section-tag">Web security testing</div>
+    <h2>Inspect and test web apps<br>from <span class="red">the same browser</span>.</h2>
+    <p class="lede" style="max-width:960px;">The optional websec plugin lets agents capture, edit, replay, and compare browser traffic. No separate MITM proxy, CA setup, or repeater.</p>
 
-    <div class="sbx" role="img" aria-label="Diagram: host files and credentials, internal services and unapproved websites are blocked at the sandbox wall. Inside, the agent, its code and dependencies, the dev server and the h5i browser run as one loop. Only a reviewed patch, a report and an execution record leave on export.">
+    <div class="sbx" role="img" aria-label="Browser requests, responses, and authenticated sessions feed an inspect, edit, replay, and compare loop, producing response differences, assertions, and repeatable test flows.">
     <div class="sbx-side">
-      <span class="sbx-h no">stays outside</span>
-      <div class="sbx-item no">Host files and credentials</div>
-      <div class="sbx-item no">Internal services</div>
-      <div class="sbx-item no">Unapproved websites</div>
+      <span class="sbx-h no">browser traffic</span>
+      <div class="sbx-item no">Requests and headers</div>
+      <div class="sbx-item no">Responses and bodies</div>
+      <div class="sbx-item no">Authenticated sessions</div>
     </div>
       <div class="sbx-gate no">
-        <span class="g-ar">&#10005;&#9656;</span>
-        <span class="g-lb">blocked</span>
+        <span class="g-ar">&#9656;</span>
+        <span class="g-lb">capture</span>
       </div>
       <div class="sb-box">
-        <div class="sb-label">&#128737;&#65039; sandbox &#183; one boundary</div>
+        <div class="sb-label">h5i websec &#183; one test loop</div>
         <div class="sbl">
-          <div class="sbl-n">Agent</div>
+          <div class="sbl-n">Inspect</div>
           <div class="sbl-a">&#9656;</div>
-          <div class="sbl-n">Code and<br>dependencies</div>
+          <div class="sbl-n">Edit</div>
           <div class="sbl-a">&#9650;</div>
           <div></div>
           <div class="sbl-a">&#9660;</div>
-          <div class="sbl-n core">h5i browser</div>
+          <div class="sbl-n core">Compare</div>
           <div class="sbl-a">&#9666;</div>
-          <div class="sbl-n">Dev server</div>
+          <div class="sbl-n">Replay</div>
         </div>
       </div>
       <div class="sbx-gate ok">
         <span class="g-ar">&#9656;</span>
-        <span class="g-lb">on export</span>
+        <span class="g-lb">verify</span>
       </div>
     <div class="sbx-side">
-      <span class="sbx-h ok">only these leave</span>
-      <div class="sbx-item ok">Reviewed patch</div>
-      <div class="sbx-item ok">Report</div>
-      <div class="sbx-item ok">Execution record</div>
+      <span class="sbx-h ok">test evidence</span>
+      <div class="sbx-item ok">Response differences</div>
+      <div class="sbx-item ok">Response assertions</div>
+      <div class="sbx-item ok">Repeatable test flows</div>
     </div>
     </div>
 
-    <p class="sb-payoff">The agent <b>still finishes the task</b>. Only the <span class="green">reviewed patch</span> is merged.</p>
+    <p class="sb-payoff">Browse the app. <b>Test its traffic.</b> Re-run the flow for <span class="green">authorized security testing</span>.</p>
   </div>
 </div>
 
@@ -1181,27 +1202,26 @@
   <div style="width:100%;max-width:1120px;">
     <div class="section-tag">Beachhead</div>
     <h2>Start with developers already giving<br>agents <span class="red">browser access</span>.</h2>
-    <p class="lede" style="max-width:940px;font-size:1.3rem;">Developers already use agents to browse and test web apps. Now they need a <span class="cyan">safer, lighter way to run more sessions</span>.</p>
+    <p class="lede" style="max-width:940px;font-size:1.3rem;">Developers use agents to browse and test web apps. They need <span class="cyan">page automation, HTTP testing, and controlled access together</span>.</p>
 
     <div style="margin-top:20px;display:flex;flex-direction:column;gap:14px;">
       <div class="feat-card" style="border-color:rgba(98,201,140,0.4);background:rgba(98,201,140,0.05);display:flex;flex-direction:column;gap:6px;">
         <span class="pill green" style="align-self:flex-start;">beachhead &#183; buys first</span>
         <span class="feat-cmd" style="display:block;border:0;background:none;padding:0; font-size:1.6rem;line-height:1.15;color:var(--green);">Developers building browser-enabled agents</span>
-        <p class="feat-desc" style="font-size:1.05rem;">Need fast local browsing, structured page output, safe web app testing, and records they can review.</p>
+        <p class="feat-desc" style="font-size:1.05rem;">Need local browsing, structured page output, HTTP security tests, and reviewable records.</p>
       </div>
 
       <div style="display:flex;flex-direction:column;gap:10px;">
         <span class="mono" style="font-size:0.78rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--cyan);">Expansion &rarr;</span>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:stretch;">
           <div class="feat-card"><span class="feat-cmd" style="display:block;border:0;background:none;padding:0;font-size:1.25rem;line-height:1.2;color:var(--cyan);">Agent platforms</span><p class="feat-desc" style="margin-top:8px;font-size:1rem;">Run many concurrent browser sessions with lower memory use.</p></div>
-          <div class="feat-card"><span class="feat-cmd" style="display:block;border:0;background:none;padding:0;font-size:1.25rem;line-height:1.2;color:var(--cyan);">Platform and DevEx teams</span><p class="feat-desc" style="margin-top:8px;font-size:1rem;">Provide one isolated browser and testing workflow across developer laptops.</p></div>
-          <div class="feat-card"><span class="feat-cmd" style="display:block;border:0;background:none;padding:0;font-size:1.25rem;line-height:1.2;color:var(--cyan);">Security teams</span><p class="feat-desc" style="margin-top:8px;font-size:1rem;">Restrict browser access, keep credentials outside the agent.</p></div>
+          <div class="feat-card"><span class="feat-cmd" style="display:block;border:0;background:none;padding:0;font-size:1.25rem;line-height:1.2;color:var(--cyan);">Platform and DevEx teams</span><p class="feat-desc" style="margin-top:8px;font-size:1rem;">Turn repeatable web tests into checks across local development and CI.</p></div>
+          <div class="feat-card"><span class="feat-cmd" style="display:block;border:0;background:none;padding:0;font-size:1.25rem;line-height:1.2;color:var(--cyan);">Security teams</span><p class="feat-desc" style="margin-top:8px;font-size:1rem;">Use agents for CTFs, security research, and authorized pentesting.</p></div>
         </div>
       </div>
     </div>
 
     <p class="mono" style="margin-top:18px;font-size:0.82rem;color:var(--text-dim);">Based on dozens of developer interviews during PhD research in AI and systems security.</p>
-    </div>
   </div>
 </div>
 
@@ -1211,16 +1231,16 @@
 <div class="slide" style="gap:22px;">
   <div style="width:100%;max-width:1080px;">
     <div class="section-tag">Why h5i wins</div>
-    <h2>Other browsers solve speed <span class="red">or</span> security.<br>h5i solves <span class="red">both</span>.</h2>
+    <h2>Page automation. HTTP testing.<br><span class="red">One security-first browser.</span></h2>
 
     <div class="ladder" style="margin-top:26px;">
-      <div class="rung"><span class="rk" style="min-width:290px;">Conventional browser automation</span><span class="rv">Built for people, so it is slow, memory-heavy, difficult to audit, and exposes more access than agents need.</span></div>
-      <div class="rung"><span class="rk" style="min-width:290px;">Lightweight browsers</span><span class="rv">Reduce startup time and memory, but do not limit what a manipulated agent can access or send.</span></div>
-      <div class="rung"><span class="rk" style="min-width:290px;">Sandboxing an existing browser</span><span class="rv">Reduces risk, but keeps the cost and complexity of a browser built for people.</span></div>
-      <div class="rung h5i"><span class="rk" style="min-width:290px;">h5i</span><span class="rv"><strong style="color:var(--ink);">~3&times; faster reads and ~86% less peak memory on simple websites, with request records, network controls, and sandboxing built in.</strong></span></div>
+      <div class="rung"><span class="rk" style="min-width:290px;">Conventional browser automation</span><span class="rv">Broad website compatibility and mature automation. HTTP security testing adds a separate workflow.</span></div>
+      <div class="rung"><span class="rk" style="min-width:290px;">Browser + proxy tools</span><span class="rv">Rich traffic inspection, with browser state, proxy setup, and test scripts to coordinate.</span></div>
+      <div class="rung"><span class="rk" style="min-width:290px;">Sandboxing an existing browser</span><span class="rv">Constrains execution and access, but does not itself add HTTP inspection or replay.</span></div>
+      <div class="rung h5i"><span class="rk" style="min-width:290px;">h5i</span><span class="rv"><strong style="color:var(--ink);">A pure-Rust browser combining page automation, HTTP capture and replay, network policies, and configurable isolation.</strong></span></div>
     </div>
 
-    <p class="kicker" style="margin-top:22px;text-align:center;font-size:1.15rem;">Fast enough to <span class="red">run more sessions</span>. Controlled enough to <span class="red">grant more autonomy</span>.</p>
+    <p class="kicker" style="margin-top:22px;text-align:center;font-size:1.15rem;"><span class="red">Protect agents</span> from the web. Use agents to <span class="red">test the web</span>.</p>
   </div>
 </div>
 
@@ -1238,7 +1258,7 @@
         <span class="feat-cmd" style="display:block;border:0;background:none;padding:0; font-size:1.25rem;color:var(--cyan);">Why now</span>
         <ul style="margin:12px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px;">
           <li class="feat-desc" style="position:relative;padding-left:1.2em;"><span style="position:absolute;left:0;color:var(--cyan);">&#9656;</span>Agents are increasingly browsing websites and testing web apps with less human supervision.</li>
-          <li class="feat-desc" style="position:relative;padding-left:1.2em;"><span style="position:absolute;left:0;color:var(--cyan);">&#9656;</span>Existing browsers make teams choose between performance and control.</li>
+          <li class="feat-desc" style="position:relative;padding-left:1.2em;"><span style="position:absolute;left:0;color:var(--cyan);">&#9656;</span>Agents need page automation, HTTP inspection, and access policies in one workflow.</li>
         </ul>
       </div>
       <div class="feat-card">
@@ -1251,13 +1271,13 @@
       <div class="feat-card">
         <span class="feat-cmd" style="display:block;border:0;background:none;padding:0; font-size:1.25rem;color:var(--yellow);">Next 12 weeks</span>
         <ul style="margin:12px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px;">
-          <li class="feat-desc" style="position:relative;padding-left:1.2em;"><span style="position:absolute;left:0;color:var(--yellow);">&#9656;</span>Expand website compatibility and ship the read-only dashboard.</li>
+          <li class="feat-desc" style="position:relative;padding-left:1.2em;"><span style="position:absolute;left:0;color:var(--yellow);">&#9656;</span>Expand website compatibility and repeatable HTTP security test flows.</li>
           <li class="feat-desc" style="position:relative;padding-left:1.2em;"><span style="position:absolute;left:0;color:var(--yellow);">&#9656;</span>Convert 10 design partners and land the first paid pilots.</li>
         </ul>
       </div>
     </div>
 
-    <p class="lede" style="margin:22px auto 0;text-align:center;max-width:860px;font-size:1.5rem;">Give your agent <strong style="color:var(--ink);">a browser</strong>. <span class="red" style="font-weight:700;">Just not yours.</span></p>
+    <p class="lede" style="margin:22px auto 0;text-align:center;max-width:860px;font-size:1.5rem;">Protect agents from the web.<br><span class="red" style="font-weight:700;">Use agents to test the web.</span></p>
 
     <div class="cta-links" style="justify-content:center;margin-top:16px;">
       <a class="btn btn-primary" href="https://h5i.dev">h5i.dev</a>
@@ -1318,7 +1338,197 @@
     if (Math.abs(dx) > 50) changeSlide(dx > 0 ? 1 : -1);
   });
 </script>
-<!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "f100fc4d4dd34a69969dbda4588ab4d9"}'></script><!-- End Cloudflare Web Analytics -->
-<script src="/_static/highlight.js?v=ed81eee4e6" defer></script>
+
+<script>/* ════════════════════════════════════════════════════════
+   h5i — tiny self-hosted syntax highlighter (no dependencies)
+
+   Targets:
+     • <pre><code class="language-bash|yaml|json|toml|ini|…">  (the Manual)
+     • .terminal-body <pre>  that contain ONLY text  (plain session blocks)
+
+   Hand-authored terminal blocks (already wrapped in <span class="t-…">)
+   are left untouched — we skip any <pre> that already has element children.
+
+   Technique: an ordered list of sticky (/…/y) rules scanned left→right.
+   At each position the first matching rule wins, emits one token, and we
+   advance past it. Anything unmatched is emitted as a single escaped char.
+   Because the scan only ever moves forward over already-decoded text and
+   re-escapes on output, it cannot corrupt markup.
+   ════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+
+  var ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+  function esc(s) { return s.replace(/[&<>]/g, function (c) { return ESC[c]; }); }
+
+  function render(tokens) {
+    var out = '';
+    for (var i = 0; i < tokens.length; i++) {
+      var t = tokens[i];
+      out += t.t === 'plain'
+        ? esc(t.v)
+        : '<span class="hl-' + t.t + '">' + esc(t.v) + '</span>';
+    }
+    return out;
+  }
+
+  // Generic forward scanner. `rules` is an ordered array of:
+  //   { t, re, when?(ctx), after?(text, ctx) }
+  // `t` may be a string or a function(text, ctx) -> string.
+  function lex(src, rules) {
+    var tokens = [], pos = 0, n = src.length;
+    var ctx = { lineStart: true, ws: true, cmd: true };
+    while (pos < n) {
+      var hit = false;
+      for (var r = 0; r < rules.length; r++) {
+        var rule = rules[r];
+        if (rule.when && !rule.when(ctx)) continue;
+        rule.re.lastIndex = pos;
+        var m = rule.re.exec(src);
+        if (m && m.index === pos && m[0].length) {
+          var text = m[0];
+          var type = typeof rule.t === 'function' ? rule.t(text, ctx) : rule.t;
+          tokens.push({ t: type, v: text });
+          if (rule.after) rule.after(text, ctx);
+          // central line/word-boundary bookkeeping
+          ctx.ws = /\s$/.test(text);
+          if (text.indexOf('\n') >= 0) ctx.lineStart = true;
+          else if (!/^[ \t]+$/.test(text)) ctx.lineStart = false;
+          pos += text.length;
+          hit = true;
+          break;
+        }
+      }
+      if (!hit) {
+        var ch = src.charAt(pos);
+        tokens.push({ t: 'plain', v: ch });
+        ctx.ws = /\s/.test(ch);
+        ctx.lineStart = ch === '\n';
+        ctx.cmd = ch === '\n';
+        pos++;
+      }
+    }
+    return tokens;
+  }
+
+  function lexer(rules) { return function (src) { return lex(src, rules); }; }
+
+  // ── bash / shell session ────────────────────────────────
+  // The command word (incl. `h5i`) is rendered uniformly (hl-cmd); the red
+  // `$` prompt is the single accent, matching the site's terminal style.
+  var BASH = lexer([
+    { t: 'plain', re: /\n/y, after: function (_, c) { c.cmd = true; } },
+    { t: 'plain', re: /[ \t]+/y },
+    { t: 'prompt', re: /\$(?= )/y, when: function (c) { return c.lineStart; }, after: function (_, c) { c.cmd = true; } },
+    { t: 'comment', re: /#[^\n]*/y, when: function (c) { return c.ws; } },
+    { t: 'string', re: /"(?:\\.|[^"\\\n])*"/y },
+    { t: 'string', re: /'[^'\n]*'/y },
+    { t: 'var', re: /\$\{[^}\n]*\}|\$\w+/y },
+    { t: 'flag', re: /--?[A-Za-z][\w-]*/y, after: function (_, c) { c.cmd = false; } },
+    { t: 'op', re: /&&|\|\||[;|]/y, after: function (_, c) { c.cmd = true; } },
+    { t: 'op', re: /[<>&]/y },
+    {
+      t: function (w, c) { return c.cmd ? 'cmd' : 'plain'; },
+      re: /[\w./@:+=~-]+/y,
+      after: function (_, c) { c.cmd = false; }
+    }
+  ]);
+
+  // ── yaml ────────────────────────────────────────────────
+  var YAML = lexer([
+    { t: 'plain', re: /\n/y },
+    { t: 'plain', re: /[ \t]+/y },
+    { t: 'comment', re: /#[^\n]*/y, when: function (c) { return c.ws; } },
+    { t: 'op', re: /-(?= )/y, when: function (c) { return c.lineStart; } },
+    { t: 'key', re: /[A-Za-z0-9_.$-]+(?=\s*:)/y, when: function (c) { return c.ws; } },
+    { t: 'string', re: /"(?:\\.|[^"\\\n])*"|'[^'\n]*'/y },
+    { t: 'bool', re: /\b(?:true|false|null|yes|no|on|off)\b/y },
+    { t: 'num', re: /-?\b\d+(?:\.\d+)?\b/y },
+    { t: 'punct', re: /[:\[\]{},]/y },
+    { t: 'plain', re: /[^\s:#,\[\]{}]+/y }
+  ]);
+
+  // ── json ────────────────────────────────────────────────
+  var JSON_L = lexer([
+    { t: 'plain', re: /\s+/y },
+    { t: 'key', re: /"(?:\\.|[^"\\\n])*"(?=\s*:)/y },
+    { t: 'string', re: /"(?:\\.|[^"\\\n])*"/y },
+    { t: 'bool', re: /\b(?:true|false|null)\b/y },
+    { t: 'num', re: /-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/y },
+    { t: 'punct', re: /[{}\[\],:]/y }
+  ]);
+
+  // ── toml / ini ──────────────────────────────────────────
+  var TOML = lexer([
+    { t: 'plain', re: /\n/y },
+    { t: 'plain', re: /[ \t]+/y },
+    { t: 'comment', re: /[#;][^\n]*/y, when: function (c) { return c.ws; } },
+    { t: 'section', re: /\[[^\]\n]*\]/y, when: function (c) { return c.lineStart; } },
+    { t: 'key', re: /[A-Za-z0-9_.-]+(?=\s*=)/y, when: function (c) { return c.ws; } },
+    { t: 'string', re: /"(?:\\.|[^"\\\n])*"|'[^'\n]*'/y },
+    { t: 'bool', re: /\b(?:true|false)\b/y },
+    { t: 'num', re: /-?\b\d+(?:\.\d+)?\b/y },
+    { t: 'punct', re: /[=,\[\]{}]/y },
+    { t: 'plain', re: /[^\s=#;]+/y }
+  ]);
+
+  var LANGS = {
+    bash: BASH, sh: BASH, shell: BASH, 'shell-session': BASH, console: BASH, zsh: BASH,
+    yaml: YAML, yml: YAML,
+    json: JSON_L,
+    toml: TOML, ini: TOML
+  };
+
+  function highlight(el, lang) {
+    if (el.dataset.hl) return;
+    el.dataset.hl = '1';
+    var fn = LANGS[lang];
+    if (!fn) return;              // unknown language → leave as-is (already escaped)
+    try { el.innerHTML = render(fn(el.textContent)); }
+    catch (e) { /* fail open: keep the original text */ }
+  }
+
+  // Conservative shell detection for code blocks with NO language hint
+  // (e.g. the Manual's bare ```fences```). We only highlight a block when it
+  // reads like commands and shows no rendered-output/diagram glyphs — so usage
+  // blocks like `h5i recall log [options]` light up while status dumps and box
+  // diagrams (✔ Committed…, ── Heatmap ──) are left untouched.
+  var OUT_GLYPH = /[─│┌┐└┘├┤┼█░▓▒●○✔✓✗✘⚠✨ℹ]/;
+  var SHELL_CMD = /^(?:\$\s*)?(?:h5i|git|cargo|cd|curl|wget|npm|npx|pnpm|yarn|bash|sh|zsh|export|claude|codex|sudo|mkdir|rm|cp|mv|cat|ls|echo|chmod|chown|ssh|scp|docker|podman|pip3?|python3?|node|make|tar|grep|sed|awk|source|set|unset|kill|touch|brew|apt)\b/;
+  function looksShell(text) {
+    if (OUT_GLYPH.test(text)) return false;
+    var lines = text.split('\n'), kept = 0, hits = 0;
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i].replace(/^\s+/, '');
+      if (!l) continue;
+      kept++;
+      if (l.charAt(0) === '#' || SHELL_CMD.test(l)) hits++;   // command or comment line
+    }
+    return kept > 0 && hits * 2 >= kept;     // majority of non-blank lines look like shell
+  }
+
+  function run() {
+    // <pre><code> blocks: use the language hint if present, else sniff for shell.
+    var coded = document.querySelectorAll('pre > code');
+    for (var i = 0; i < coded.length; i++) {
+      var code = coded[i];
+      var m = /language-([\w-]+)/.exec(code.className || '');
+      if (m) highlight(code, m[1].toLowerCase());
+      else if (code.childElementCount === 0 && looksShell(code.textContent)) highlight(code, 'bash');
+    }
+    // terminal-session blocks (skip hand-authored ones that already have spans)
+    var terms = document.querySelectorAll('.terminal pre');
+    for (var j = 0; j < terms.length; j++) {
+      if (terms[j].childElementCount === 0) highlight(terms[j], 'bash');
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', run);
+  } else {
+    run();
+  }
+})();
+</script>
 </body>
 </html>
