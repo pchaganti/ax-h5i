@@ -278,6 +278,7 @@ around the boundary. Report what was denied and why you needed it.
 ## References
 
 - [references/browser.md](references/browser.md) — sessions, the request log, the control lock, the viewer
+- [references/websec.md](references/websec.md) — authorized HTTP inspection, replay, comparison, and assertions
 - [references/boxes.md](references/boxes.md) — lifecycle, sources, naming, gc
 - [references/policy.md](references/policy.md) — profiles, tiers, egress, secrets
 - [references/export.md](references/export.md) — the gate and reading a receipt
