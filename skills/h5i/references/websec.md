@@ -1,6 +1,6 @@
 # Web security testing
 
-Test only authorized targets. Keep requests within the granted origin, identity, rate, and scope; obtain approval before expanding them.
+Test only authorized targets. Keep requests within the granted origin, identity, rate, and scope; obtain approval before expanding them. Open the session with `--capture`, exercise the relevant flow, then work from its message IDs.
 
 ```bash
 h5i browser open https://target.example --capture
