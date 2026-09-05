@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>h5i pitch deck (PDF): an auditable browser for AI agents</title>
-<meta name="description" content="The h5i pitch deck as a PDF. Thirteen slides on the auditable agent browser, the box it can be placed in, the isolation tiers, and the output gate.">
+<title>h5i pitch deck (PDF): a security-first browser for AI agents</title>
+<meta name="description" content="The h5i pitch deck as a PDF. Ten slides on the pure-Rust browser for AI agents: browsing and automation, the HTTP test loop, network policy, auditing, and sandboxing.">
 <meta name="author" content="h5i-dev">
 <meta name="theme-color" content="#D21C1C">
 <meta name="color-scheme" content="dark">
@@ -18,15 +18,15 @@
 <!-- Open Graph -->
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="h5i">
-<meta property="og:title" content="h5i pitch deck (PDF): an auditable browser for AI agents">
+<meta property="og:title" content="h5i pitch deck (PDF): a security-first browser for AI agents">
 <meta property="og:description" content="The h5i pitch deck as a PDF. View it inline or download it.">
 <meta property="og:url" content="https://h5i.dev/pitch/pdf/">
 <meta property="og:image" content="https://h5i.dev/_static/sandbox-ui-demo.png">
 <meta property="og:image:alt" content="The h5i box console: every box with its tier, status and one signal on the left, and the refused-egress finding, the receipt flight recorder and the enforced policy on the right">
 <meta property="og:locale" content="en_US">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="h5i pitch deck (PDF): an auditable browser for AI agents">
-<meta name="twitter:description" content="The h5i pitch deck as a PDF: the auditable agent browser, the box it can be placed in, the isolation tiers, and the output gate.">
+<meta name="twitter:title" content="h5i pitch deck (PDF): a security-first browser for AI agents">
+<meta name="twitter:description" content="The h5i pitch deck as a PDF: a pure-Rust browser for AI agents, with network policy, auditing, and configurable sandboxing.">
 <meta name="twitter:image" content="https://h5i.dev/_static/sandbox-ui-demo.png">
 <meta name="twitter:image:alt" content="The h5i box console: every box with its tier, status and one signal on the left, and the refused-egress finding, the receipt flight recorder and the enforced policy on the right">
 
@@ -85,8 +85,12 @@
   }
   .fallback p { color: var(--text-dim); max-width: 46ch; line-height: 1.6; }
   @media (max-width: 640px) {
-    header { padding: 10px 14px; }
+    /* Phones arrive here from the deck's redirect, so the title keeps its
+       own line and the buttons wrap under it instead of squeezing it out. */
+    header { padding: 10px 14px; flex-wrap: wrap; row-gap: 10px; }
     header h1 .dim { display: none; }
+    header .actions { width: 100%; margin-left: 0; }
+    header .btn { flex: 1; justify-content: center; }
   }
 </style>
 </head>
@@ -103,7 +107,7 @@
 
 <main>
   <object data="../h5i-pitch-deck.pdf#view=FitH" type="application/pdf"
-          aria-label="h5i pitch deck PDF, 13 slides">
+          aria-label="h5i pitch deck PDF, 10 slides">
     <div class="fallback">
       <p>Your browser does not display PDFs inline. Download the deck instead,
          or open the interactive version.</p>

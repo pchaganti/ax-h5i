@@ -11,6 +11,13 @@
 <meta name="color-scheme" content="dark">
 <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
 <link rel="canonical" href="https://h5i.dev/pitch/">
+<script>
+  // Smartphones get the PDF version: the deck's fixed 16:9 slides fight a
+  // phone viewport. `?deck` opts back into the interactive deck.
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isMobile && !new URLSearchParams(location.search).has('deck'))
+    location.replace('pdf/');
+</script>
 
 <link rel="icon" type="image/png" href="https://h5i.dev/_static/logo.png">
 <link rel="apple-touch-icon" href="https://h5i.dev/_static/logo.png">
@@ -901,7 +908,7 @@
 <div class="bg-grid"></div>
 
 <div class="export-group">
-  <a class="export-btn" href="https://h5i.dev/pitch/">h5i.dev / pitch</a>
+  <a class="export-btn" href="pdf/">PDF version</a>
   <button class="export-btn" onclick="window.print()">⬇ Export PDF</button>
 </div>
 <button class="nav-arrow prev" onclick="changeSlide(-1)">‹</button>
