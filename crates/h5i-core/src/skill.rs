@@ -40,6 +40,10 @@ pub const PAGES: &[Page] = &[
         path: "references/troubleshooting.md",
         text: include_str!("../../../skills/h5i/references/troubleshooting.md"),
     },
+    Page {
+        path: "references/websec.md",
+        text: include_str!("../../../skills/h5i/references/websec.md"),
+    },
 ];
 
 /// The name the skill installs under.
@@ -159,6 +163,8 @@ mod tests {
         assert!(page(Some("policy")).is_ok());
         assert!(page(Some("policy.md")).is_ok());
         assert!(page(Some("references/policy.md")).is_ok());
+        assert!(page(Some("websec")).is_ok());
+        assert!(page(Some("websec.md")).is_ok());
         assert!(page(Some("nope")).is_err());
     }
 }

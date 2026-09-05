@@ -5156,12 +5156,15 @@ fn skill_install_writes_the_embedded_pages() {
     let skill = std::fs::read_to_string(target.join("SKILL.md")).expect("SKILL.md");
     assert!(skill.starts_with("---\nname: h5i\n"), "frontmatter: {skill}");
     assert!(target.join("references/policy.md").is_file());
+    assert!(target.join("references/websec.md").is_file());
 
     // `show` prints the same bytes without touching the filesystem.
     let shown = out_str(&r.h5i_ok(&["skill", "show"]));
     assert_eq!(shown, skill);
     let page = out_str(&r.h5i_ok(&["skill", "show", "policy"]));
     assert!(page.contains("Profiles"), "{page}");
+    let websec = out_str(&r.h5i_ok(&["skill", "show", "websec"]));
+    assert!(websec.contains("Web security testing"), "{websec}");
 }
 
 /// Receipt integrity: the persisted policy grants the box `$WORK` and nothing
