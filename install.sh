@@ -8,24 +8,40 @@ main() {
   INSTALL_DIR="${H5I_INSTALL_DIR:-/usr/local/bin}"
 
   # ── what to install ────────────────────────────────────────────────────────
-  # One binary. The rendering engine used to ship as a second file
+  # One binary by default. The rendering engine used to ship as a second file
   # (`h5i-browser-light`) and is now linked into `h5i`, which execs itself to
   # become it. That removed three things at once: a default install that left
   # `h5i browser open` with nothing to render a page, a version skew between two
   # halves of one protocol with no handshake between them, and a box that could
   # read the engine without being allowed to exec it.
+  # `h5i` first, always: `--websec` registers its plugin by running the h5i
+  # this loop has just installed, so the order is a dependency, not a
+  # preference.
   BINARIES="h5i"
   for arg in "$@"; do
     case "$arg" in
+      # `websec` is the HTTP workbench: read, edit, resend and compare what a
+      # browser session sent. It is a separate executable rather than a build
+      # flag, so h5i can be given a capability without that capability being
+      # linked into the process that enforces policy. Off by default because an
+      # install should not quietly include everything that could be built on a
+      # browser.
+      --websec | --with-websec) BINARIES="h5i h5i-websec" ;;
       # Both accepted and both no-ops: there is one binary now, and quietly
       # rejecting a flag that used to work breaks scripts for no gain.
       --with-browser | --no-browser | --browser-only) ;;
       -h | --help)
-        echo "Usage: install.sh"
+        echo "Usage: install.sh [--websec]"
         echo
         echo "  Installs h5i, which includes the browser engine."
+        echo
+        echo "  --websec        also install the websec plugin (the HTTP"
+        echo "                  workbench), then register it as \`h5i websec\`."
         echo "  --with-browser, --no-browser and --browser-only are accepted"
         echo "  and do nothing: the engine is part of the binary now."
+        echo
+        echo "Piped into a shell, options go after \`sh -s --\`:"
+        echo "  curl -fsSL https://h5i.dev/install.sh | sh -s -- --websec"
         echo
         echo "Environment: H5I_INSTALL_DIR, H5I_VERSION, H5I_SKIP_CHECKSUM"
         exit 0
@@ -119,7 +135,11 @@ main() {
     ARCHIVE="${BINARY}-${VERSION}-${target}.tar.gz"
     URL="https://github.com/${REPO}/releases/download/${VERSION}/${ARCHIVE}"
 
-    echo "Installing ${BINARY} ${VERSION} (${target}) → ${INSTALL_DIR}/${BINARY}"
+    if [ "$BINARY" = "h5i-websec" ]; then
+      echo "Installing ${BINARY} ${VERSION} (${target}) → h5i's plugin directory"
+    else
+      echo "Installing ${BINARY} ${VERSION} (${target}) → ${INSTALL_DIR}/${BINARY}"
+    fi
 
     if ! curl -fsSL "$URL" -o "${TMP}/${ARCHIVE}"; then
       echo "Could not download ${ARCHIVE}." >&2
@@ -167,6 +187,22 @@ main() {
     tar -xzf "${TMP}/${ARCHIVE}" -C "$TMP" --no-same-owner
 
     # ── install ────────────────────────────────────────────────────────────────
+    # The plugin does not go on `$PATH`. h5i resolves `h5i websec` to a file in
+    # its own state directory, not by searching a path, so that `h5i plugin
+    # list` is the whole truth about what is installed and so a stray
+    # `h5i-something` on `$PATH` can never become an `h5i something` verb.
+    # Registering it is therefore h5i's job, not this script's: hand the
+    # verified file to the h5i installed one iteration ago and let it place the
+    # file itself.
+    #
+    # `--force` because an installer that is re-run should converge rather than
+    # fail on the copy it put there last time.
+    if [ "$BINARY" = "h5i-websec" ]; then
+      "${INSTALL_DIR}/h5i" plugin install websec --from "${TMP}/${BINARY}" --force
+      echo "✔  websec ${VERSION} installed: run h5i websec --help"
+      continue
+    fi
+
     # `install` rather than `mv`: `mv` preserves the *invoking user's* ownership,
     # which under sudo leaves a user-writable h5i sitting in a root-owned PATH
     # directory. Anything running as that user — including an agent in a

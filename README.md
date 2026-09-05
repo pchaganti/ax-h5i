@@ -76,12 +76,17 @@ npx skills add h5i-dev/h5i         # if you do not have the binary yet
 # h5i skill show policy            # or just read a page
 ```
 
-The optional `websec` plugin is distributed separately:
+The optional `websec` plugin ships as its own archive. The installer can fetch
+and register it in the same pass:
 
 ```bash
-curl -fsSL https://h5i.dev/install.sh --websec | sh
-h5i plugin install websec --from ./h5i-websec
+curl -fsSL https://h5i.dev/install.sh | sh -s -- --websec
 ```
+
+The plugin is a separate executable, so it does not go on your `PATH`: the
+installer hands it to `h5i plugin install`, which keeps it in h5i's own state
+directory. After that `h5i websec` works, and `h5i plugin list` says what is
+installed.
 
 ---
 
