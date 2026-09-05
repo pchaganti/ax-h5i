@@ -392,7 +392,8 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      # musl linker/compiler for both musl targets; OpenSSL is vendored.
+      # musl linker/compiler for both musl targets. OpenSSL is not in the
+      # graph: git2 is built without `https`/`ssh`.
       - name: Install musl-tools (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update -q && sudo apt-get install -y musl-tools

@@ -148,7 +148,8 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      # musl linker/compiler; OpenSSL is vendored so no system libssl-dev needed
+      # musl linker/compiler. No libssl-dev either way: git2 is built without
+      # `https`/`ssh`, so nothing in the graph links OpenSSL at all.
       - name: Install musl-tools (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update -q && sudo apt-get install -y musl-tools

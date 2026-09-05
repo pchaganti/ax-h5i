@@ -7,7 +7,10 @@ resolver = "3"
 # `#[from]` conversions across a crate boundary).
 [workspace.dependencies]
 thiserror = "2.0.18"
-git2 = "0.20.4"
+# No `https`/`ssh`: they pull OpenSSL, and the macOS build linked Homebrew's,
+# which is not on every Mac. Nothing here needs them, so git2 cannot fetch,
+# push or clone.
+git2 = { version = "0.20.4", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 # `preserve_order`: a `json.` edit rewrites the body, and a replay whose keys
 # came back sorted is not the request that was recorded.
@@ -22,7 +25,7 @@ sha2 = "0.10"
 name = "h5i"
 version = "0.4.1"
 edition = "2024"
-description = "h5i — secure, auditable browser for AI agents (CLI)."
+description = "h5i — security-first browser for AI agents (CLI)."
 
 [lib]
 name = "h5i"
