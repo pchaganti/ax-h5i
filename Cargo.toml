@@ -7,7 +7,20 @@ resolver = "3"
 # `#[from]` conversions across a crate boundary).
 [workspace.dependencies]
 thiserror = "2.0.18"
-git2 = "0.20.4"
+# `default-features = false` drops git2's `https` and `ssh`, which are the only
+# reason libgit2 wants a TLS stack: `https` pulls openssl-sys and `ssh` pulls
+# libssh2-sys, which pulls it again. h5i never asks libgit2 to reach a network.
+# Every repository it opens is a local path, and the one place it does clone
+# over a network (`h5i env`) shells out to the git binary, which brings its own
+# transport. So the dependency bought nothing and cost the macOS build: dynamic
+# linking picked up Homebrew's `/opt/homebrew/opt/openssl@3/lib/libssl.3.dylib`,
+# and the published binary then aborted at startup on any Mac without that exact
+# path (#598).
+#
+# The constraint this creates: `git2` here cannot fetch, push or clone. Adding
+# such a call compiles and fails at run time, so reach for the git binary the
+# way `env` does, or turn `https` back on knowingly and vendor OpenSSL with it.
+git2 = { version = "0.20.4", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 # `preserve_order`: a `json.` edit rewrites the body, and a replay whose keys
 # came back sorted is not the request that was recorded.
