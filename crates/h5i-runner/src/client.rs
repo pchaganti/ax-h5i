@@ -648,13 +648,26 @@ mod tests {
 
     /// A transport that runs a shell script instead of a worker, so a test can
     /// make the far side behave in ways a real worker never would.
+    ///
+    /// The product's own clocks, which are a backstop against hanging and not a
+    /// latency budget. A tighter one here races the child: these tests are
+    /// about what the client concludes when a peer misbehaves, and a watchdog
+    /// that beats the child's own exit turns a loaded machine into a different
+    /// verdict. It did. A 5s clock here failed on macOS CI whenever the runner
+    /// was busy enough to starve `/bin/sh` for five seconds, and the kill that
+    /// followed was reported as our timeout rather than the peer's exit.
     fn scripted(script: &str) -> ChildProcessTransport {
+        scripted_within(script, Deadlines::default().handshake)
+    }
+
+    /// The same, for the one test that *is* about the handshake clock.
+    fn scripted_within(script: &str, handshake: Duration) -> ChildProcessTransport {
         ChildProcessTransport {
             program: "/bin/sh".into(),
             args: vec!["-c".into(), script.into()],
             env: vec![],
             deadlines: Deadlines {
-                handshake: Duration::from_secs(5),
+                handshake,
                 control: Duration::from_secs(5),
             },
         }
@@ -682,10 +695,15 @@ mod tests {
     #[test]
     fn a_peer_that_never_answers_hits_the_handshake_clock() {
         // `exec`: a surviving shell would hold the pipe open past the kill.
-        let client = Client::new(Box::new(scripted("exec sleep 60"))).with_deadlines(Deadlines {
-            handshake: Duration::from_millis(300),
-            control: Duration::from_secs(30),
-        });
+        //
+        // On the transport, which is where the handshake watchdog is armed.
+        // `Client::with_deadlines` sets only the *request* clock, re-armed once
+        // a handshake lands, so setting it here was setting nothing: this
+        // waited out the helper's default and passed for the wrong reason.
+        let client = Client::new(Box::new(scripted_within(
+            "exec sleep 60",
+            Duration::from_millis(300),
+        )));
         match client.hello() {
             Err(ClientError::TimedOut { .. }) => {}
             other => panic!("expected TimedOut, got {other:?}"),

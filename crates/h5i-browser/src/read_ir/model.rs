@@ -51,6 +51,11 @@ pub enum ReadRole {
     Image,
     Checkbox,
     Radio,
+    /// Actionable only because the page made it so: `<div onclick=…>`.
+    ///
+    /// Not `button`: no keyboard activation, no implicit role, nothing a screen
+    /// reader announces. Reporting it as nothing left it unaddressable.
+    Clickable,
 }
 
 impl ReadRole {
@@ -89,6 +94,7 @@ impl ReadRole {
             ReadRole::Image => "image",
             ReadRole::Checkbox => "checkbox",
             ReadRole::Radio => "radio",
+            ReadRole::Clickable => "clickable",
         }
     }
 

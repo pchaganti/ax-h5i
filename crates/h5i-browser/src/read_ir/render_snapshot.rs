@@ -178,6 +178,7 @@ mod tests {
             ReadRole::Image,
             ReadRole::Checkbox,
             ReadRole::Radio,
+            ReadRole::Clickable,
         ] {
             for level in 1..=6u8 {
                 let word = role.as_str(level);

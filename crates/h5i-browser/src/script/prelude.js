@@ -5246,14 +5246,14 @@
         });
         this.dispatchEvent(event);
         if (event.defaultPrevented) return;
-        this.__h5iEntryList = buildEntryList(this, submitter ?? null);
+        submitTheForm(this, submitter ?? null);
       },
     });
     Object.defineProperty(TAG_CLASSES.get("form").prototype, "submit", {
       configurable: true, writable: true,
       value() {
         // No validation and no `submit` event, deliberately. See above.
-        this.__h5iEntryList = buildEntryList(this, null);
+        submitTheForm(this, null);
       },
     });
 
@@ -5569,6 +5569,57 @@
         installInlineHandler(element, lowered, source);
       }
     }
+  };
+
+  /// The elements that fetch something, and the attribute that names it.
+  ///
+  /// Neither `load` nor `error` was ever dispatched on these: the fetch
+  /// happened, the receipt was written, and nothing told the element. So
+  /// `<img src=x onerror=…>` did nothing, and a real finding read as none.
+  const RESOURCE_ATTR = { OBJECT: "data", LINK: "href" };
+  const RESOURCE_SELECTOR =
+    "img[src],input[src],script[src],link[href],iframe[src],frame[src]," +
+    "embed[src],object[data],source[src],track[src],audio[src],video[src]";
+
+  /// Deliver `load` and `error` for the subresources that have resolved.
+  ///
+  /// From the document's own record (`api.resourceStatus`), never a second
+  /// request: an element not in there yet is left for the next pass rather than
+  /// guessed about. Once per URL an element holds, so re-running is free and a
+  /// changed `src` re-arms. Returns whether anything was dispatched.
+  globalThis.__h5iFireResourceEvents = function () {
+    let fired = false;
+    for (const id of api.queryAll(RESOURCE_SELECTOR, 0)) {
+      const element = wrap(id);
+      if (!element) continue;
+      // A dynamic `<script>` goes through the loader, which fires its own pair.
+      if (element.tagName === "SCRIPT" && element.__h5iScriptStarted) continue;
+      const raw = api.getAttr(id, RESOURCE_ATTR[element.tagName] ?? "src");
+      if (!raw || element.__h5iResourceFor === raw) continue;
+      let resolved;
+      try {
+        resolved = new URL(raw, document.baseURI).href;
+      } catch {
+        continue;
+      }
+      const status = api.resourceStatus(resolved);
+      if (status === null) continue;
+      element.__h5iResourceFor = raw;
+      // Outside 2xx is a resource the page did not get; `0` is one that got no
+      // answer. Both are `error`, and which it was is in the receipt.
+      element.dispatchEvent(new Event(status >= 200 && status < 300 ? "load" : "error"));
+      fired = true;
+    }
+    // `<svg>` fires `load` once in the document, waiting on no resource of its
+    // own, which is why no subresource bookkeeping reaches `<svg onload=…>`.
+    for (const id of api.queryAll("svg", 0)) {
+      const element = wrap(id);
+      if (!element || element.__h5iSvgLoaded) continue;
+      element.__h5iSvgLoaded = true;
+      element.dispatchEvent(new Event("load"));
+      fired = true;
+    }
+    return fired;
   };
 
   /// Turn every `<template shadowrootmode>` inside `within` into a shadow root.
@@ -6649,6 +6700,31 @@
       entries.push([name, field.value]);
     }
     return entries;
+  }
+
+  /// Submit a form for real: hand its entry list to the engine.
+  ///
+  /// The list is built here, where the algorithm lives; the encoding is the
+  /// engine's, so a form and `websec replay` cannot disagree. `FormData` rather
+  /// than `buildEntryList` because it fires `formdata`.
+  function submitTheForm(form, submitter) {
+    const attribute = (name) => {
+      const override = submitter && api.getAttr(submitter._id, "form" + name);
+      return override != null ? override : (api.getAttr(form._id, name) ?? "");
+    };
+    const data = new FormData(form, submitter ?? null);
+    form.__h5iEntryList = data._entries;
+    // `action` reflects the document's address when the attribute is missing,
+    // which is where an actionless form submits.
+    const action = (submitter && api.getAttr(submitter._id, "formaction") != null)
+      ? submitter.formAction
+      : form.action;
+    api.submitForm(
+      String(action || ""),
+      attribute("method"),
+      attribute("enctype"),
+      data._entries.map(([name, value]) => [String(name), String(value)]),
+    );
   }
 
   class FormData {
@@ -8277,6 +8353,11 @@
     documentReadyState = "interactive";
     at(new Event("readystatechange"));
     at(new Event("DOMContentLoaded", { bubbles: true }));
+
+    // Where a browser puts them: an image's `load` has fired by the time the
+    // window's does, and a `DOMContentLoaded` handler counting them is already
+    // listening.
+    globalThis.__h5iFireResourceEvents();
 
     documentReadyState = "complete";
     at(new Event("readystatechange"));

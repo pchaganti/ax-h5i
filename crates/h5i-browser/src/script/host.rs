@@ -133,6 +133,18 @@ pub struct Host {
     /// `None` is "the page declared no map".
     pub import_map: RefCell<Option<crate::script::import_map::ImportMap>>,
 
+    /// How every subresource turned out, read through `api.resourceStatus`.
+    ///
+    /// Shared with the document's net provider, not copied, so a resource added
+    /// after the realm exists is in here too.
+    pub resources: RefCell<crate::net::ResourceLog>,
+
+    /// Where a submission the *page* made waits for the session to send it.
+    ///
+    /// Not sent from here: a page navigating out of a settle would move the
+    /// document the caller is reading. See [`crate::engine::NavigationSlot`].
+    pub navigation: RefCell<crate::engine::NavigationSlot>,
+
     /// Set whenever script changed the tree, so the engine knows to re-resolve
     /// style and layout once rather than after every mutation.
     ///
@@ -300,6 +312,8 @@ impl Host {
             #[cfg(feature = "identity")]
             identity,
             import_map: RefCell::new(None),
+            resources: RefCell::new(crate::net::ResourceLog::default()),
+            navigation: RefCell::new(crate::engine::NavigationSlot::default()),
             encoding: RefCell::new(encoding_rs::UTF_8),
             dirty: RefCell::new(false),
             styles_stale: RefCell::new(false),

@@ -580,8 +580,10 @@ impl Walker<'_> {
                 // Not for a ref-taking element: its name is how an agent tells one
                 // control from another. Not for `code`, whose whole point is that its
                 // text is carried verbatim.
+                // Except `clickable`: a wrapper that merely carries a handler
+                // still has structure under it worth reading.
                 let hoisting = is_leaf
-                    && !takes_ref
+                    && (!takes_ref || role == ReadRole::Clickable)
                     && role != ReadRole::Code
                     && hoists_a_block(self.doc, node);
 
@@ -823,7 +825,40 @@ pub(crate) fn describe(tag: &str, node: &Node) -> Option<Descriptor> {
 
     let input_type = attr_of(node, "type").map(str::to_ascii_lowercase);
     let has_href = attr_of(node, "href").is_some();
-    role_for(tag, input_type.as_deref(), has_href)
+    role_for(tag, input_type.as_deref(), has_href).or_else(|| {
+        // Last, so a `<button onclick>` is still a button. Only for the element
+        // whose sole claim to being actionable is the handler: without this it
+        // got no `@ref`, so no verb could reach the handler at all.
+        has_activation_handler(node).then_some(Descriptor {
+            role: ReadRole::Clickable,
+            level: 0,
+            takes_ref: true,
+            is_leaf: true,
+        })
+    })
+}
+
+/// The handler attributes that make an element respond to being clicked.
+///
+/// Pointer activation only: a ref on `<div onmouseover>` would offer a verb
+/// that does not apply.
+const ACTIVATION_HANDLERS: [&str; 6] = [
+    "onclick",
+    "ondblclick",
+    "onmousedown",
+    "onmouseup",
+    "onpointerdown",
+    "onpointerup",
+];
+
+/// Whether the page made this element clickable with a handler attribute.
+///
+/// Attributes only: an `addEventListener` listener lives in the realm, not the
+/// tree, so this reading cannot see it and does not pretend to.
+pub(crate) fn has_activation_handler(node: &Node) -> bool {
+    ACTIVATION_HANDLERS
+        .iter()
+        .any(|name| attr_of(node, name).is_some())
 }
 
 /// Whether this node or anything above it is `aria-hidden="true"`.

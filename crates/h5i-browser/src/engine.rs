@@ -224,6 +224,59 @@ pub struct Submission {
     pub content_type: Option<String>,
 }
 
+/// A form's entry list as a query string: what a `GET` form puts in the URL.
+pub fn encode_form_query(entries: &[(String, String)]) -> String {
+    let mut out = String::new();
+    url::form_urlencoded::Serializer::new(&mut out).extend_pairs(entries);
+    out
+}
+
+/// A form's entry list as a request body, and the content type describing it.
+///
+/// Three encodings, because a server that reads one does not read the others.
+/// Uploads are absent: filling one in would mean reading the box's filesystem.
+pub fn encode_form_body(enctype: &str, entries: &[(String, String)]) -> (Vec<u8>, String) {
+    match enctype.trim() {
+        "text/plain" => {
+            // The one encoding that escapes nothing.
+            let mut out = String::new();
+            for (name, value) in entries {
+                out.push_str(name);
+                out.push('=');
+                out.push_str(value);
+                out.push_str("\r\n");
+            }
+            (out.into_bytes(), "text/plain;charset=UTF-8".to_string())
+        }
+        "multipart/form-data" => {
+            let boundary = crate::multipart::fresh_boundary();
+            let parts: Vec<crate::multipart::Part> = entries
+                .iter()
+                .map(|(name, value)| crate::multipart::Part {
+                    name: name.clone(),
+                    data: value.as_bytes().to_vec(),
+                    ..Default::default()
+                })
+                .collect();
+            (
+                crate::multipart::serialize(&parts, &boundary),
+                format!("multipart/form-data; boundary={boundary}"),
+            )
+        }
+        _ => (
+            encode_form_query(entries).into_bytes(),
+            "application/x-www-form-urlencoded".to_string(),
+        ),
+    }
+}
+
+/// Where a submission waits to be picked up.
+///
+/// One slot for both fillers, Blitz's algorithm and the page's own
+/// `form.submit()`, so a handler cannot leave a second request behind for the
+/// next verb to send by surprise. Last one wins, as in a browser.
+pub type NavigationSlot = Arc<std::sync::Mutex<Option<Submission>>>;
+
 /// A [`NavigationProvider`] that catches the request instead of following it.
 ///
 /// Blitz calls this from inside `submit_form`, so the request arrives on the
@@ -232,7 +285,7 @@ pub struct Submission {
 /// page has exactly one owner (see `stream`'s module docs).
 #[derive(Clone)]
 struct CapturedNavigation {
-    slot: Arc<std::sync::Mutex<Option<Submission>>>,
+    slot: NavigationSlot,
     /// The document the form lives in, so the captured request carries the
     /// origin it was made from. Filled here rather than left for the caller
     /// because a `Submission` with no origin is one the policy trusts, and a
@@ -293,7 +346,9 @@ pub struct Page {
     encoding: &'static encoding_rs::Encoding,
     options: PageOptions,
     /// Where [`CapturedNavigation`] leaves whatever the last form asked for.
-    pending_navigation: Arc<std::sync::Mutex<Option<Submission>>>,
+    pending_navigation: NavigationSlot,
+    /// So the page can hear `load` and `error`. See [`crate::net::ResourceLog`].
+    resources: crate::net::ResourceLog,
     /// The script realm, when this page has one. `None` when script is off,
     /// which is still the default: `capabilities.javascript` is the gate, and
     /// flipping it is a threat-model decision rather than a feature flag
@@ -328,6 +383,12 @@ pub struct Page {
     /// Engine-level facts the next snapshot should carry.
     notes: Vec<String>,
 }
+
+/// How many submissions a page may chain on its own before this stops following.
+const MAX_SELF_SUBMISSIONS: usize = 3;
+
+/// Enough for an image that loads an image. A page that keeps going is looping.
+const RESOURCE_EVENT_PASSES: usize = 3;
 
 /// The event-handler content attributes, as a selector.
 ///
@@ -778,15 +839,17 @@ impl Page {
         fonts: &FontSetup,
         viewport: Viewport,
         captured: CapturedNavigation,
+        resources: crate::net::ResourceLog,
     ) -> BaseDocument {
         HtmlDocument::from_html(
             html,
             DocumentConfig {
                 viewport: Some(viewport),
                 base_url: Some(base_url.to_string()),
-                net_provider: Some(Arc::new(BrokerNet::new(
+                net_provider: Some(Arc::new(BrokerNet::with_log(
                     broker,
                     Some(base_url.clone()),
+                    resources,
                 ))),
                 font_ctx: Some(fonts.context.clone()),
                 // Without this Blitz uses `DummyHtmlParserProvider` and
@@ -843,6 +906,7 @@ impl Page {
             document: base_url.clone(),
         };
         let pending_navigation = captured.slot.clone();
+        let resources = crate::net::ResourceLog::default();
 
         // Parsing can abort the process, so it is guarded and retried.
         let attempt = |markup: &str| {
@@ -854,6 +918,7 @@ impl Page {
                     &fonts,
                     viewport.clone(),
                     captured.clone(),
+                    resources.clone(),
                 )
             }))
         };
@@ -923,6 +988,7 @@ impl Page {
             budget_spent: None,
             options,
             pending_navigation,
+            resources,
             script: None,
             ran_scripts: false,
             layout_failure,
@@ -1072,6 +1138,12 @@ impl Page {
         )
         .map_err(H5iError::Metadata)?;
         script.set_encoding(self.encoding);
+        // Shared, not copied: the document keeps filling this in as script adds
+        // images and frames.
+        script.set_resource_log(self.resources.clone());
+        // The slot Blitz's algorithm fills too, so the page and the `submit`
+        // verb produce one request between them rather than two.
+        script.set_navigation_slot(self.pending_navigation.clone());
 
         // The map, before anything can import. First one wins and the rest are
         // ignored, which is what the specification says to do with a second:
@@ -1134,6 +1206,9 @@ impl Page {
         // the loops do not have to hold a borrow of `self` across the calls
         // that mutate the script realm.
         let document = self.url.clone();
+        // A `<script src>` is fetched here rather than by the net provider, so
+        // without this it is the one subresource the page never hears about.
+        let resources = self.resources.clone();
 
         for (index, (node, source)) in classic.into_iter().enumerate() {
             if phase_started.elapsed() >= phase_budget {
@@ -1169,6 +1244,9 @@ impl Page {
                         crate::receipt::Initiator::Subresource,
                         Some(&document),
                     );
+                    if let Ok(mut log) = resources.lock() {
+                        log.record(&url, &outcome);
+                    }
                     if let Some(error) = outcome.error {
                         script.note_refused_script(url.as_str());
                         script.note_error(&format!("could not load {url}: {error}"));
@@ -1301,6 +1379,13 @@ impl Page {
         if self.composite_canvases() {
             self.note_layout_failure(lay_out(&self.doc));
         }
+        // An image a startup script appended was only fetched by the layout
+        // pass above. Its handlers' requests belong to the load, so they drain
+        // with it.
+        self.deliver_resource_events();
+        if let Some(script) = self.script.as_mut() {
+            let _ = script.take_requests();
+        }
         Ok(())
     }
 
@@ -1318,13 +1403,11 @@ impl Page {
         let script = self.script.as_mut()?;
         let _ = script.dispatch(node_id, kind);
         let settled = script.settle();
-        let dirty = script.take_dirty();
-        let requests = script.take_requests();
-        self.settled = Some(settled);
-        let painted = self.composite_canvases();
-        if dirty || painted {
-            self.note_layout_failure(lay_out(&self.doc));
-        }
+        self.after_script(settled);
+        // Before the requests are taken, so an `onerror` handler's fetch is
+        // attributed to this action rather than to the agent's next one.
+        self.deliver_resource_events();
+        let requests = self.script.as_mut()?.take_requests();
         Some(requests)
     }
 
@@ -1416,6 +1499,24 @@ impl Page {
         dirty || painted
     }
 
+    /// Let the page hear about the subresources that have resolved.
+    ///
+    /// After layout, not before: Blitz starts a fetch when it resolves the
+    /// tree, so an `<img>` script appended has no outcome until then. A handler
+    /// can add another, so this repeats, bounded.
+    fn deliver_resource_events(&mut self) {
+        for _ in 0..RESOURCE_EVENT_PASSES {
+            let Some(script) = self.script.as_mut() else {
+                return;
+            };
+            if !script.fire_resource_events() {
+                return;
+            }
+            let settled = script.settle();
+            self.after_script(settled);
+        }
+    }
+
     /// Hand every drawn canvas surface to the document as raster image data.
     fn composite_canvases(&mut self) -> bool {
         let Some(script) = self.script.as_ref() else {
@@ -1487,12 +1588,10 @@ impl Page {
         };
         let _ = script.dispatch_key(node_id, kind, key);
         let settled = script.settle();
-        let dirty = script.take_dirty();
-        let _ = script.take_requests();
-        self.settled = Some(settled);
-        let painted = self.composite_canvases();
-        if dirty || painted {
-            self.note_layout_failure(lay_out(&self.doc));
+        self.after_script(settled);
+        self.deliver_resource_events();
+        if let Some(script) = self.script.as_mut() {
+            let _ = script.take_requests();
         }
     }
 
@@ -2084,6 +2183,15 @@ impl Page {
         Some(input.editor.text().to_string())
     }
 
+    /// Whatever the page asked to navigate to on its own, if it asked.
+    ///
+    /// A form the page submitted leaves its request here rather than sending
+    /// it, so the session sends it like every other: through the broker,
+    /// receipted, with the agent told the page moved. See [`NavigationSlot`].
+    pub fn take_pending_submission(&mut self) -> Option<Submission> {
+        self.pending_navigation.lock().ok()?.take()
+    }
+
     /// Submit the form that owns `node_id`, and return the request it produced.
     pub fn submit_form(&mut self, node_id: usize) -> Result<Submission, H5iError> {
         // Blitz keeps a control-to-form map but does not expose it, so the
@@ -2135,13 +2243,9 @@ impl Page {
         }
         let script = self.script.as_mut()?;
         let settled = script.settle();
-        let dirty = script.take_dirty();
-        let requests = script.take_requests();
-        self.settled = Some(settled);
-        let painted = self.composite_canvases();
-        if dirty || painted {
-            self.note_layout_failure(lay_out(&self.doc));
-        }
+        self.after_script(settled);
+        self.deliver_resource_events();
+        let requests = self.script.as_mut()?.take_requests();
         Some((requests, proceed))
     }
 
@@ -2376,9 +2480,47 @@ impl PageFactory {
         crate::fonts::load(&self.font_sources, &[], Some(self.font_sources.len()))
     }
 
-    /// Load whatever a form asked for, through the same broker as everything
-    /// else. A refused submission is an error the agent reads, not a blank page.
+    /// Load whatever a form asked for, then whatever *that* page submits on its
+    /// own. A refusal is an error the agent reads, not a blank page.
     pub fn open_submission(&self, submission: &Submission) -> Result<Page, H5iError> {
+        Ok(self.follow_self_submissions(self.load_submission(submission)?))
+    }
+
+    /// Send the submissions a page made on its own, and end on the last answer.
+    ///
+    /// A `form.submit()` at load is a login interstitial or a POST CSRF proof.
+    /// The request is receipted like every other and the page is *told* it
+    /// moved. Bounded: a form that submits itself on load is a redirect loop.
+    fn follow_self_submissions(&self, mut page: Page) -> Page {
+        for _ in 0..MAX_SELF_SUBMISSIONS {
+            let Some(submission) = page.take_pending_submission() else {
+                return page;
+            };
+            let from = page.url().clone();
+            match self.load_submission(&submission) {
+                Ok(next) => {
+                    page = next;
+                    page.note(&format!(
+                        "{from} submitted a form to {} by itself, without anything being \
+                         clicked, and this is the answer to that submission",
+                        submission.url
+                    ));
+                }
+                Err(error) => {
+                    page.note(&format!("this page tried to submit a form by itself: {error}"));
+                    return page;
+                }
+            }
+        }
+        page.note(&format!(
+            "this page submitted a form by itself more than {MAX_SELF_SUBMISSIONS} times \
+             running, so the engine stopped following it"
+        ));
+        page
+    }
+
+    /// One submission, without following whatever the answer submits next.
+    fn load_submission(&self, submission: &Submission) -> Result<Page, H5iError> {
         let _navigating = self.begin_navigation();
         let outcome = self.broker.send_from(
             &submission.url,
@@ -2474,7 +2616,7 @@ impl PageFactory {
         // `cookies::Jar::retain_origin` for why that bound exists and what it
         // costs, and `finish` for why it moved.
         let page = Page::open(url, self.broker.clone(), self.fonts(), self.options.clone())?;
-        self.finish(page)
+        Ok(self.follow_self_submissions(self.finish(page)?))
     }
 
     /// Load HTML already in hand, running its scripts if the options ask.
@@ -2487,25 +2629,25 @@ impl PageFactory {
     /// not yet known, so the document gets to say what it is written in.
     pub fn from_bytes(&self, bytes: &[u8], content_type: Option<&str>, base_url: &Url) -> Page {
         let _navigating = self.begin_navigation();
-        self.finish_reporting(Page::from_bytes(
+        self.follow_self_submissions(self.finish_reporting(Page::from_bytes(
             bytes,
             content_type,
             base_url,
             self.broker.clone(),
             self.fonts(),
             self.options.clone(),
-        ))
+        )))
     }
 
     pub fn from_html(&self, html: &str, base_url: &Url) -> Page {
         let _navigating = self.begin_navigation();
-        self.finish_reporting(Page::from_html(
+        self.follow_self_submissions(self.finish_reporting(Page::from_html(
             html,
             base_url,
             self.broker.clone(),
             self.fonts(),
             self.options.clone(),
-        ))
+        )))
     }
 }
 
@@ -2894,6 +3036,56 @@ mod tests {
                 ..Default::default()
             },
         )
+    }
+
+    /// An element the page made clickable is one an agent can reach (#609).
+    ///
+    /// A `<div onclick=…>` had no role, so no `@ref`, so no verb could fire the
+    /// handler. Its own role word: it is not a button.
+    #[test]
+    fn an_element_made_clickable_by_a_handler_attribute_takes_a_ref() {
+        let sink = Arc::new(MemorySink::new());
+        let page = page_from(
+            r#"<!doctype html><html><body>
+                <div id="d" onclick="run()">Delete everything</div>
+                <span onmouseover="hint()">just a hint</span>
+                <button onclick="run()">Run</button>
+            </body></html>"#,
+            Policy::new(),
+            sink,
+        );
+
+        let snapshot = page.snapshot();
+        let rendered = snapshot.render();
+        assert!(
+            rendered.contains("clickable \"Delete everything\""),
+            "a div with an inline click handler must be addressable:\n{rendered}"
+        );
+        // Pointer activation only. `click` does not apply to a hover handler,
+        // and a ref would be offering a verb that does nothing.
+        assert!(!rendered.contains("just a hint\" [ref"), "{rendered}");
+        // And nothing that has a role of its own is relabelled by this.
+        assert!(rendered.contains("button \"Run\""), "{rendered}");
+        let roles: Vec<&str> = snapshot.refs.iter().map(|r| r.role.as_str()).collect();
+        assert_eq!(roles, vec!["clickable", "button"]);
+    }
+
+    /// ...and it does not swallow the structure it wraps: a clickable card read
+    /// as one leaf line loses the heading and link the reader came for.
+    #[test]
+    fn a_clickable_wrapper_still_lets_its_contents_speak() {
+        let sink = Arc::new(MemorySink::new());
+        let page = page_from(
+            r#"<!doctype html><html><body>
+                <div onclick="open()"><h2>Invoice 41</h2><p>Due Friday</p></div>
+            </body></html>"#,
+            Policy::new(),
+            sink,
+        );
+
+        let rendered = page.snapshot().render();
+        assert!(rendered.contains("heading2 \"Invoice 41\""), "{rendered}");
+        assert!(rendered.contains("paragraph \"Due Friday\""), "{rendered}");
     }
 
     #[test]

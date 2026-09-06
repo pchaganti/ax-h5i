@@ -342,6 +342,12 @@ pub struct Session {
     /// Where this machine can read the session's own logs, when it can.
     #[serde(default)]
     pub logs: Logs,
+    /// Whether pages here may send credentials cross-origin (`--permissive-cors`).
+    ///
+    /// On the record and not only in the digest, which says two sessions differ
+    /// without saying how: a result gathered under this means something else.
+    #[serde(default)]
+    pub permissive_cors: bool,
 }
 
 /// The engine's two logs, as this machine sees them.
@@ -1680,6 +1686,7 @@ mod tests {
             enclosing_box: None,
             control: Control::default(),
             logs: Logs::default(),
+            permissive_cors: false,
         }
     }
 

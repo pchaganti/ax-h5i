@@ -48,6 +48,13 @@ pub struct Policy {
     any_remote: bool,
     max_redirects: usize,
     max_response_bytes: u64,
+    /// Let a page send the session's credentials cross-origin, as a browser
+    /// does (#612).
+    ///
+    /// Off by default, which is right for containing an agent and wrong for
+    /// testing a target: the shape refused is the classic POST CSRF. An opt-in
+    /// rather than a relaxation, so it is in the digest and in `status`.
+    cross_site_credentials: bool,
 }
 
 impl Default for Policy {
@@ -62,6 +69,7 @@ impl Default for Policy {
             any_remote: false,
             max_redirects: 5,
             max_response_bytes: 8 * 1024 * 1024,
+            cross_site_credentials: false,
         }
     }
 }
@@ -139,6 +147,29 @@ impl Policy {
     /// between a measurement and the thing measured that §B19 is about.
     pub fn allows_any_remote(&self) -> bool {
         self.any_remote
+    }
+
+    /// See the `cross_site_credentials` field.
+    pub fn set_cross_site_credentials(mut self, allow: bool) -> Self {
+        self.cross_site_credentials = allow;
+        self
+    }
+
+    /// Whether this policy is the permissive one, so a caller can say so.
+    ///
+    /// Read by `status` and `open`'s banner: a mode this wide that does not
+    /// announce itself makes a result unreproducible.
+    pub fn allows_cross_site_credentials(&self) -> bool {
+        self.cross_site_credentials
+    }
+
+    /// The same fact, in the shape the same-origin policy asks for it.
+    pub fn cors_stance(&self) -> crate::cors::Stance {
+        if self.cross_site_credentials {
+            crate::cors::Stance::Browser
+        } else {
+            crate::cors::Stance::Contained
+        }
     }
 
     pub fn set_max_redirects(mut self, max: usize) -> Self {

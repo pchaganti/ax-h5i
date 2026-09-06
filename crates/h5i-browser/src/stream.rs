@@ -1350,6 +1350,10 @@ fn control_verb(session: &mut Session, request: &Value) -> (Value, bool) {
     }
 
     let (mut reply, moved) = control_verb_inner(session, request, verb);
+    // A handler may have submitted a form. After the verb, so its reply is the
+    // verb's, and before the caller sees anything, so nobody reads a snapshot
+    // of a document the page has already left.
+    let self_submitted = follow_page_submission(session, &mut reply);
     if navigated {
         // Where it actually ended up, which a redirect may have changed. An
         // agent that fused the navigation into the read still gets the one
@@ -1360,7 +1364,55 @@ fn control_verb(session: &mut Session, request: &Value) -> (Value, bool) {
                 .or_insert_with(|| json!(session.page.url().to_string()));
         }
     }
-    (reply, moved || navigated)
+    (reply, moved || navigated || self_submitted)
+}
+
+/// Send whatever the page submitted on its own, and land on the answer.
+///
+/// `form.submit()` is a real request (#611) but not the page's to *send*: the
+/// realm records it and this sends it, at the one boundary where the page is
+/// not mid-run. Said in the reply, not only in the URL, because every `@ref`
+/// the caller holds describes the page that is gone.
+fn follow_page_submission(session: &mut Session, reply: &mut Value) -> bool {
+    let mut moved = false;
+    for _ in 0..MAX_PAGE_SUBMISSIONS {
+        let Some(submission) = session.page.take_pending_submission() else {
+            break;
+        };
+        let from = session.page.url().clone();
+        match session.factory.open_submission(&submission) {
+            Ok(page) => {
+                session.land(page);
+                moved = true;
+                if let Some(object) = reply.as_object_mut() {
+                    object.insert(
+                        "page_submitted".to_string(),
+                        json!({
+                            "from": from.to_string(),
+                            "method": submission.method,
+                            "url": session.page.url().to_string(),
+                        }),
+                    );
+                    object.insert("url".to_string(), json!(session.page.url().to_string()));
+                }
+            }
+            Err(error) => {
+                if let Some(object) = reply.as_object_mut() {
+                    object.insert(
+                        "page_submitted".to_string(),
+                        json!({
+                            "from": from.to_string(),
+                            "method": submission.method,
+                            "url": submission.url.to_string(),
+                            "error": format!("{error}"),
+                        }),
+                    );
+                }
+                break;
+            }
+        }
+    }
+    moved
 }
 
 /// Go to a URL, resolved against the page the session is on.
@@ -1394,6 +1446,9 @@ fn navigate_to(session: &mut Session, target: &str) -> Result<(), Value> {
         Err(error) => Err(VerbError::refused(format!("{error}")).reply()),
     }
 }
+
+/// How many a page may chain in one verb. One that keeps going is looping.
+const MAX_PAGE_SUBMISSIONS: usize = 3;
 
 /// Submit the form a control sits in, and land on the answer.
 ///
@@ -5715,6 +5770,36 @@ mod tests {
             session.page.url().as_str().contains("/search?q=shoes"),
             "the form's own action and method, with its fields: {}",
             session.page.url()
+        );
+    }
+
+    /// A form the *page* submits during a verb goes out at the verb boundary,
+    /// and the reply says so (#611).
+    ///
+    /// The policy grants nothing, so it is refused before the wire. That is the
+    /// point: what is under test is that the request was picked up at all.
+    #[test]
+    fn a_form_the_page_submits_itself_is_sent_at_the_verb_boundary() {
+        let mut session = scripted_session_with(
+            "<html><body>\
+             <form id='f' method='POST' action='https://bank.example/transfer'>\
+             <input name='amount' value='1000'></form>\
+             <button id='b' onclick=\"document.getElementById('f').submit()\">go</button>\
+             </body></html>",
+        );
+        let button = serve_refs(&mut session)
+            .into_iter()
+            .find(|entry| entry.role == "button")
+            .expect("the button is in the reading");
+        let (reply, _) =
+            control_verb(&mut session, &json!({"verb": "click", "ref": button.id}));
+
+        let submitted = &reply["page_submitted"];
+        assert_eq!(submitted["method"], "POST", "{reply:?}");
+        assert_eq!(submitted["url"], "https://bank.example/transfer", "{reply:?}");
+        assert!(
+            submitted["error"].as_str().is_some_and(|e| e.contains("denied by policy")),
+            "the refusal is the answer, and it names itself: {reply:?}"
         );
     }
 

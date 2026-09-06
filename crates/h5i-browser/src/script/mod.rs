@@ -1160,6 +1160,29 @@ impl Script {
         *self.host.encoding.borrow_mut() = encoding;
     }
 
+    /// Hand the realm the slot a page's own form submission is left in.
+    pub fn set_navigation_slot(&mut self, slot: crate::engine::NavigationSlot) {
+        *self.host.navigation.borrow_mut() = slot;
+    }
+
+    /// Deliver `load` and `error` to the elements whose subresources have
+    /// resolved, and say whether anything was dispatched. After layout: see
+    /// [`crate::engine::Page::deliver_resource_events`].
+    pub fn fire_resource_events(&mut self) -> bool {
+        match self.eval_value("__h5iFireResourceEvents()") {
+            Ok(value) => value == "true",
+            Err(error) => {
+                self.note_error(&format!("resource events could not be fired: {error}"));
+                false
+            }
+        }
+    }
+
+    /// Hand the realm the table of subresource outcomes the document fills in.
+    pub fn set_resource_log(&mut self, log: crate::net::ResourceLog) {
+        *self.host.resources.borrow_mut() = log;
+    }
+
     /// Install the page's `<script type="importmap">`, before anything imports.
     pub fn set_import_map(&mut self, source: &str) {
         match crate::script::import_map::ImportMap::parse(source, &self.host.base) {
