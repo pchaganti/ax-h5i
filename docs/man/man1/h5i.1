@@ -985,9 +985,9 @@ Refuse loopback too. It is reachable by default: it is the dev server
 Run the page\*(Aqs own JavaScript. Off by default: with script off, page\-borne prompt injection has no delivery channel at all
 .TP
 \fB\-\-permissive\-cors\fR
-Let this session\*(Aqs pages send credentials cross\-origin the way a browser does: `mode: "no\-cors"` with `credentials: "include"`.
+Let this session\*(Aqs pages send credentials cross\-origin as a browser does: `mode: "no\-cors"` with `credentials: "include"`.
 
-Refused by default, and the default is right for containing an agent: an opaque response cannot be read, so nothing can check that the server agreed. It is also the classic POST\-CSRF vector, so the refusal stopped h5i acting as the *victim* in a CSRF test \(em a negative result meant "h5i declined", not "the target is safe". Scoped to this session, part of its policy digest, and named in `h5i browser status`.
+Refused by default, which is right for containing an agent: an opaque response cannot be read, so nothing can check the server agreed. It is also the classic POST\-CSRF vector, so the refusal stopped h5i acting as the victim in a CSRF test. Fixed at creation, in the policy digest, and named in `h5i browser status`.
 .TP
 \fB\-\-no\-sandbox\fR
 Run the engine unconfined.
