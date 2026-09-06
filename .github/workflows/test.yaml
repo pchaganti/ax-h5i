@@ -359,7 +359,7 @@ jobs:
   # caught BEFORE a tag is cut — not in `release.yaml`, which only runs on tags.
   # `cargo check` (not a full build) is enough: every such failure is a
   # front-end compile/type/cfg error. Keep this matrix in sync with
-  # `release.yaml`'s build matrix — and check both products it ships, because
+  # `release.yaml`'s build matrix — and check every product it ships, because
   # this job checked only `h5i` while the release built the engine too, and so
   # let two separate engine-only failures through to the v0.3.5 tag.
   cross-check:
@@ -413,3 +413,4 @@ jobs:
         run: |
           cargo check --locked --target ${{ matrix.target }}
           cargo check --locked --target ${{ matrix.target }} -p h5i-browser
+          cargo check --locked --target ${{ matrix.target }} -p h5i-websec
