@@ -822,13 +822,12 @@ struct NetArgs {
     #[arg(long)]
     allow_any_remote: bool,
 
-    /// Let this session's pages send credentials cross-origin the way a browser
+    /// Let this session's pages send credentials cross-origin as a browser
     /// does: `mode: "no-cors"` with `credentials: "include"`.
     ///
-    /// Refused by default, because an opaque response cannot be checked, so
-    /// nothing can show the server agreed. That refusal is also exactly the
-    /// classic POST-CSRF vector, which made h5i unable to act as the victim in
-    /// a CSRF test. Scoped to one session and named in `h5i browser status`.
+    /// Refused by default: an opaque response cannot be checked. That refusal
+    /// is also the classic POST-CSRF vector, so it stopped h5i acting as the
+    /// victim in a CSRF test.
     #[arg(long = "permissive-cors")]
     permissive_cors: bool,
 
@@ -2379,8 +2378,7 @@ fn doctor(net: &NetArgs) -> Result<(), H5iError> {
     if policy.allows_cross_site_credentials() {
         println!(
             "cors       : PERMISSIVE (--permissive-cors) — a page may send this session's \
-             credentials cross-origin with `no-cors`, which a browser does and this engine \
-             otherwise refuses"
+             credentials cross-origin with `no-cors`, as a browser does"
         );
     }
 

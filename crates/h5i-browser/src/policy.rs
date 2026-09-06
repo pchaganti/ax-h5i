@@ -48,20 +48,12 @@ pub struct Policy {
     any_remote: bool,
     max_redirects: usize,
     max_response_bytes: u64,
-    /// Let a page send the session's credentials to another origin, the way a
-    /// browser does.
+    /// Let a page send the session's credentials cross-origin, as a browser
+    /// does (#612).
     ///
-    /// Off by default, and the default is the right one for containing an
-    /// agent: `mode: "no-cors"` with `credentials: "include"` sends a cookie
-    /// somewhere the page can never read the answer from, so nothing can check
-    /// that the server agreed. That is also the exact shape of a POST-based
-    /// CSRF, which is why refusing it outright made h5i unable to *be the
-    /// victim* in a CSRF test: a negative result meant "h5i declined", not "the
-    /// target is safe" (#612).
-    ///
-    /// So it is an opt-in rather than a relaxation: one session, named in
-    /// `h5i browser status`, and part of the policy digest, so nobody gets it
-    /// by accident and nobody can be given it quietly.
+    /// Off by default, which is right for containing an agent and wrong for
+    /// testing a target: the shape refused is the classic POST CSRF. An opt-in
+    /// rather than a relaxation, so it is in the digest and in `status`.
     cross_site_credentials: bool,
 }
 
@@ -157,8 +149,7 @@ impl Policy {
         self.any_remote
     }
 
-    /// Let this session's pages behave like a browser about cross-site
-    /// credentials. See the `cross_site_credentials` field.
+    /// See the `cross_site_credentials` field.
     pub fn set_cross_site_credentials(mut self, allow: bool) -> Self {
         self.cross_site_credentials = allow;
         self
@@ -166,10 +157,8 @@ impl Policy {
 
     /// Whether this policy is the permissive one, so a caller can say so.
     ///
-    /// Read by `status` and by `open`'s banner, for the same reason
-    /// [`Policy::allows_any_remote`] is: a mode that widens what a page may do
-    /// with a credential and does not announce itself is the kind of quiet
-    /// difference that makes a result unreproducible.
+    /// Read by `status` and `open`'s banner: a mode this wide that does not
+    /// announce itself makes a result unreproducible.
     pub fn allows_cross_site_credentials(&self) -> bool {
         self.cross_site_credentials
     }

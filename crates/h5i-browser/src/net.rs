@@ -2549,34 +2549,24 @@ fn find_crlf_crlf(bytes: &[u8]) -> Option<usize> {
     bytes.windows(4).position(|window| window == b"\r\n\r\n")
 }
 
-/// How every subresource this document asked for turned out.
+/// How every subresource turned out, for the page's `load` and `error` events.
 ///
-/// The page's own `load` and `error` events are the only reason this exists.
-/// Blitz fetches images, stylesheets and frames on its own schedule and hands
-/// the bytes straight to layout, so by the time the script realm is built the
-/// outcome of each one has been decided and thrown away — which is why
-/// `<img src=x onerror=…>` did nothing here while the 404 sat plainly in the
-/// request log. Recorded by URL because that is the only thing the two sides
-/// share: Blitz's `Request` does not say which element asked.
-///
-/// Shared with the realm rather than copied, because a resource the page adds
-/// later resolves after the realm exists.
+/// Blitz decides each outcome and throws it away, so nothing in the page could
+/// see the 404 sitting in the request log. Keyed by URL because that is all the
+/// two sides share: Blitz's `Request` does not say which element asked.
 pub type ResourceLog = Arc<std::sync::Mutex<ResourceOutcomes>>;
 
 /// The table behind a [`ResourceLog`].
 #[derive(Debug, Default)]
 pub struct ResourceOutcomes {
-    /// URL to HTTP status, with `0` for a request that never got an answer:
-    /// refused by policy, or a connection that failed. Both are `error` to a
-    /// page, and the distinction is in the receipt, which is where it belongs.
+    /// `0` for a request that got no answer: refused, or a failed connection.
+    /// Both are `error` to a page; which it was is in the receipt.
     by_url: std::collections::HashMap<String, u16>,
 }
 
 impl ResourceOutcomes {
-    /// Record one outcome, under both the URL asked for and the one answered.
-    ///
-    /// Both, because a redirected image is `src` in the markup and the final
-    /// URL in the outcome, and the page will ask about the first.
+    /// Under both URLs: a redirected image is `src` in the markup and the final
+    /// URL in the outcome, and the page asks about the first.
     pub fn record(&mut self, asked: &Url, outcome: &FetchOutcome) {
         let status = match (outcome.error.as_ref(), outcome.status) {
             (Some(_), _) | (None, None) => 0,
@@ -2608,8 +2598,7 @@ pub struct BrokerNet {
     /// the box's dev server, which is precisely what [`Policy::check_from`]
     /// exists to refuse. `None` only for a document with no origin of its own.
     document: Option<Url>,
-    /// Where each subresource's fate is written down, for the page to hear
-    /// about as a `load` or an `error`.
+    /// Where each subresource's fate is written down for the page to hear.
     resources: ResourceLog,
 }
 
@@ -2684,11 +2673,7 @@ mod tests {
         }
     }
 
-    /// The table the page's `load` and `error` events are read from.
-    ///
-    /// h5i-dev/h5i#610. Keyed by both URLs because a redirected image is `src`
-    /// in the markup and the final URL in the outcome, and the page will ask
-    /// about the first.
+    /// The table the page's `load` and `error` events are read from (#610).
     #[test]
     fn a_subresource_outcome_is_recorded_under_both_of_its_urls() {
         let mut outcomes = ResourceOutcomes::default();
@@ -2702,13 +2687,10 @@ mod tests {
         assert_eq!(outcomes.status(asked.as_str()), Some(200));
         assert_eq!(outcomes.status("https://cdn.test/b.png"), Some(200));
 
-        // A URL nobody asked for is `None`, not `0`: "never fetched" and
-        // "fetched and got nothing" are different answers, and only the second
-        // is an `error` for the page.
+        // `None`, not `0`: only "fetched and got nothing" is an `error`.
         assert_eq!(outcomes.status("https://cdn.test/never.png"), None);
 
-        // A refusal and a connection failure are both `0`. Which one it was is
-        // in the receipt.
+        // A refusal and a failed connection are both `0`.
         let refused = url("https://blocked.test/x.png");
         outcomes.record(
             &refused,
@@ -2717,9 +2699,8 @@ mod tests {
         assert_eq!(outcomes.status(refused.as_str()), Some(0));
     }
 
-    /// Every subresource Blitz fetches is recorded on its way through, whether
-    /// it arrived or not — the whole point being that a denial is an `error`
-    /// the page hears rather than a silence it cannot distinguish from success.
+    /// Recorded whether it arrived or not, so a denial is an `error` the page
+    /// hears rather than a silence it cannot tell from success.
     #[test]
     fn the_blitz_adapter_records_what_each_subresource_came_back_as() {
         let sink = Arc::new(MemorySink::new());

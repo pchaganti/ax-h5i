@@ -1042,13 +1042,10 @@ fn attr_names(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRes
     Ok(out.into())
 }
 
-/// How a subresource turned out: the HTTP status, `0` for a request that never
-/// got an answer, and `null` for a URL this document never asked for.
+/// How a subresource turned out: the status, `0` for no answer, `null` for a
+/// URL this document never asked for.
 ///
-/// The page reads this to decide between `load` and `error` on the element that
-/// asked. It reports only what this document already fetched, so it is not a
-/// probe: a URL nobody requested comes back `null` rather than being fetched to
-/// find out.
+/// Not a probe: an unrequested URL comes back `null` rather than being fetched.
 fn resource_status(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let url = arg_string(args, 0, context)?;
     let host = host(context)?;
@@ -1062,23 +1059,19 @@ fn resource_status(_this: &JsValue, args: &[JsValue], context: &mut Context) -> 
 
 /// Record the request a form the page submitted has turned into.
 ///
-/// The entry list is built in the prelude, where the algorithm already lives;
-/// the *encoding* is done here, so that a form's body and the one
-/// `h5i websec replay` composes come out of one implementation. Recorded rather
-/// than sent — see [`crate::engine::NavigationSlot`] for why the page does not
-/// get to navigate itself out from under the caller.
+/// The entry list is the prelude's, where the algorithm lives; the encoding is
+/// here, so a form's body and `websec replay`'s come out of one place.
+/// Recorded, not sent: see [`crate::engine::NavigationSlot`].
 ///
-/// Answers whether it was taken. `method="dialog"`, an empty action and a
-/// scheme this engine does not submit over are all a `false` here rather than a
-/// request nobody expected.
+/// `method="dialog"`, an empty action and a scheme this engine does not submit
+/// over are all `false` here rather than a request nobody expected.
 fn submit_form(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let action = arg_string(args, 0, context)?;
     let method = arg_string(args, 1, context)?.to_ascii_lowercase();
     let enctype = arg_string(args, 2, context)?.to_ascii_lowercase();
     let entries = arg_entries(args, 3, context)?;
 
-    // A form's method is `get` unless it says otherwise, and `dialog` closes
-    // the dialog it is in rather than reaching the network.
+    // `dialog` closes the dialog it is in rather than reaching the network.
     if method == "dialog" {
         return Ok(JsValue::from(false));
     }
@@ -1100,9 +1093,7 @@ fn submit_form(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
             content_type: Some(content_type),
         }
     } else {
-        // The query is *replaced*, not appended to: a `GET` form whose action
-        // carries one submits without it, which is the part of the algorithm
-        // that surprises people.
+        // *Replaced*, not appended: a `GET` action's own query does not survive.
         url.set_query(Some(&crate::engine::encode_form_query(&entries)));
         url.set_fragment(None);
         crate::engine::Submission {
@@ -1122,19 +1113,14 @@ fn submit_form(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
     Ok(JsValue::from(true))
 }
 
-/// How many entries one form submission may carry.
-///
-/// A `formdata` listener can append without limit, and this is the one list
-/// that crosses from the realm into a request body. Bounded like every other
-/// page-controlled quantity here, and generously: a form with ten thousand
-/// fields is not a form.
+/// How many entries one submission may carry. A `formdata` listener can append
+/// without limit, and this list crosses from the realm into a request body.
 const MAX_FORM_ENTRIES: usize = 10_000;
 
 /// Read an argument that is an array of `[name, value]` pairs.
 ///
-/// Anything that is not a pair is skipped rather than refused: the argument
-/// comes from the prelude, and a malformed entry is this engine's bug to find
-/// in a test, not a reason to fail a page's submission at runtime.
+/// A malformed entry is skipped: the argument is the prelude's, so it is this
+/// engine's bug to find in a test, not a page's submission to fail at runtime.
 fn arg_entries(
     args: &[JsValue],
     index: usize,

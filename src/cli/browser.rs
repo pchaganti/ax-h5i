@@ -112,16 +112,14 @@ pub enum BrowserCommands {
         #[arg(long)]
         script: bool,
 
-        /// Let this session's pages send credentials cross-origin the way a
-        /// browser does: `mode: "no-cors"` with `credentials: "include"`.
+        /// Let this session's pages send credentials cross-origin as a browser
+        /// does: `mode: "no-cors"` with `credentials: "include"`.
         ///
-        /// Refused by default, and the default is right for containing an
-        /// agent: an opaque response cannot be read, so nothing can check that
-        /// the server agreed. It is also the classic POST-CSRF vector, so the
-        /// refusal stopped h5i acting as the *victim* in a CSRF test — a
-        /// negative result meant "h5i declined", not "the target is safe".
-        /// Scoped to this session, part of its policy digest, and named in
-        /// `h5i browser status`.
+        /// Refused by default, which is right for containing an agent: an
+        /// opaque response cannot be read, so nothing can check the server
+        /// agreed. It is also the classic POST-CSRF vector, so the refusal
+        /// stopped h5i acting as the victim in a CSRF test. Fixed at creation,
+        /// in the policy digest, and named in `h5i browser status`.
         #[arg(long)]
         permissive_cors: bool,
 
@@ -3787,8 +3785,8 @@ fn print_summary(session: &bs::Session) {
         }
     );
     println!("  policy   : {}", session.policy_digest);
-    // Named, not left to the digest. A digest says two sessions differ; this
-    // says how, and it is the difference that changes what a finding means.
+    // Named, not left to the digest: a digest says two sessions differ, and
+    // this is the difference that changes what a finding means.
     if session.permissive_cors {
         println!(
             "  cors     : {} — a page here may send this session's credentials \

@@ -1350,11 +1350,9 @@ fn control_verb(session: &mut Session, request: &Value) -> (Value, bool) {
     }
 
     let (mut reply, moved) = control_verb_inner(session, request, verb);
-    // A handler that ran during this verb may have submitted a form. The page
-    // left the request behind rather than sending it, so this is where it goes
-    // out — after the verb, so its own reply is the verb's, and before the
-    // caller sees anything, so nobody reads a snapshot of a document the page
-    // has already left.
+    // A handler may have submitted a form. After the verb, so its reply is the
+    // verb's, and before the caller sees anything, so nobody reads a snapshot
+    // of a document the page has already left.
     let self_submitted = follow_page_submission(session, &mut reply);
     if navigated {
         // Where it actually ended up, which a redirect may have changed. An
@@ -1371,15 +1369,10 @@ fn control_verb(session: &mut Session, request: &Value) -> (Value, bool) {
 
 /// Send whatever the page submitted on its own, and land on the answer.
 ///
-/// The page's own `form.submit()` is a real request now (#611), but it is not
-/// the page's to *send*: this engine drives navigation through its own verbs so
-/// that an agent and a receipt both see it. So the realm records the request and
-/// this sends it, at the one boundary where the page is not in the middle of
-/// running.
-///
-/// Says so in the reply rather than only in the URL. An agent that clicked a
-/// button and is now on a different document needs to be told, because every
-/// `@ref` it holds describes the page that is gone.
+/// `form.submit()` is a real request (#611) but not the page's to *send*: the
+/// realm records it and this sends it, at the one boundary where the page is
+/// not mid-run. Said in the reply, not only in the URL, because every `@ref`
+/// the caller holds describes the page that is gone.
 fn follow_page_submission(session: &mut Session, reply: &mut Value) -> bool {
     let mut moved = false;
     for _ in 0..MAX_PAGE_SUBMISSIONS {
@@ -1454,8 +1447,7 @@ fn navigate_to(session: &mut Session, target: &str) -> Result<(), Value> {
     }
 }
 
-/// How many submissions a page may make of its own accord in one verb before
-/// the engine stops following them. A page that keeps going is looping.
+/// How many a page may chain in one verb. One that keeps going is looping.
 const MAX_PAGE_SUBMISSIONS: usize = 3;
 
 /// Submit the form a control sits in, and land on the answer.
@@ -5781,19 +5773,11 @@ mod tests {
         );
     }
 
-    /// A form the *page* submits during a verb is sent at the verb boundary,
-    /// and the reply says so.
+    /// A form the *page* submits during a verb goes out at the verb boundary,
+    /// and the reply says so (#611).
     ///
-    /// h5i-dev/h5i#611. `form.submit()` used to build the entry list and drop
-    /// it, so a handler that submitted did nothing at all. It is still not the
-    /// page's to send: the realm records the request and this is where it goes
-    /// out. But an agent whose click moved the document has to be told, because
-    /// every `@ref` it holds describes the page that is gone.
-    ///
-    /// The policy here grants nothing, so the submission is refused before it
-    /// can reach the wire. That is the point: what is under test is that the
-    /// request was picked up and attempted, and a refusal is an answer with a
-    /// receipt behind it rather than a silence.
+    /// The policy grants nothing, so it is refused before the wire. That is the
+    /// point: what is under test is that the request was picked up at all.
     #[test]
     fn a_form_the_page_submits_itself_is_sent_at_the_verb_boundary() {
         let mut session = scripted_session_with(

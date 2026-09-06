@@ -400,8 +400,8 @@ impl Builder<'_> {
         // whatever its tag says. Not for a ref-taking element, whose name is how
         // an agent tells one control from another, and not for `code`, whose
         // whole point is that its text is carried verbatim.
-        // The `clickable` exception, as in the snapshot walker: a wrapper that
-        // carries a handler still has structure under it worth reading.
+        // Except `clickable`, as in the snapshot walker: a wrapper that merely
+        // carries a handler still has structure worth reading.
         let hoisting = is_leaf
             && (!takes_ref || role == ReadRole::Clickable)
             && role != ReadRole::Code

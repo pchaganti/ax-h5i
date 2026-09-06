@@ -51,15 +51,10 @@ pub enum ReadRole {
     Image,
     Checkbox,
     Radio,
-    /// An element that is only actionable because the page made it so: a `<div>`
-    /// or `<span>` carrying an inline `onclick`.
+    /// Actionable only because the page made it so: `<div onclick=…>`.
     ///
-    /// Its own word rather than `button`, because it is not one: it has no
-    /// keyboard activation, no implicit role and nothing a screen reader would
-    /// announce. Reporting it as a button would be this engine disagreeing with
-    /// the accessibility tree; reporting it as nothing at all left the element
-    /// unaddressable, so a handler that a real browser would run could not be
-    /// reached from a verb.
+    /// Not `button`: no keyboard activation, no implicit role, nothing a screen
+    /// reader announces. Reporting it as nothing left it unaddressable.
     Clickable,
 }
 

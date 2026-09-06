@@ -233,24 +233,17 @@ fn serialize(from: Option<&Origin>) -> String {
 
 /// How strictly this session holds the origin boundary.
 ///
-/// One knob, and only one thing turns on it: whether a page may put the
-/// session's credentials on a request to another origin whose answer nobody can
-/// read. See [`Stance::Browser`].
+/// One knob, one thing on it: whether a page may put the session's credentials
+/// on a request to another origin whose answer nobody can read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Stance {
-    /// The default. A credential does not cross an origin boundary on a request
-    /// that cannot be checked.
+    /// The default: no credential crosses on a request that cannot be checked.
     #[default]
     Contained,
-    /// What a real browser does, opted into for one session.
+    /// What a browser does, opted into for one session (#612).
     ///
-    /// The refusal this lifts is a good default for containing an agent and a
-    /// bad one for testing a target, because it is exactly the classic
-    /// POST-CSRF vector: with it in force h5i cannot act as the victim, so a
-    /// negative result means "h5i declined" rather than "the target is safe"
-    /// (#612). Named in `h5i browser status` and part of the policy digest,
-    /// because a session that behaves differently about credentials must not be
-    /// one anybody is in by accident.
+    /// The refusal it lifts is the classic POST-CSRF vector, so with it in
+    /// force h5i cannot act as the victim and a negative means "h5i declined".
     Browser,
 }
 
@@ -306,9 +299,7 @@ pub fn plan(
             // Sendable, but the caller learns nothing. Credentials are the
             // same-origin default only, so a beacon does not carry a session.
             //
-            // Credentialed `no-cors` is the one case the stance decides, and
-            // it decides it in both directions: a browser sends it, and this
-            // engine's default does not. See [`Stance`].
+            // Credentialed `no-cors` is the one case the stance decides.
             let send_cookies =
                 matches!(credentials, Credentials::Include) && matches!(stance, Stance::Browser);
             if !matches!(credentials, Credentials::Include) || send_cookies {
@@ -855,8 +846,8 @@ mod tests {
             Stance::Contained,
         );
         match refused {
-            // The refusal has to name the way out, or an agent reading it
-            // concludes the target is safe rather than that h5i declined.
+            // It has to name the way out, or an agent concludes the target is
+            // safe rather than that h5i declined.
             Plan::Blocked(why) => assert!(
                 why.contains("--permissive-cors"),
                 "the refusal must name the opt-in, got: {why}"
@@ -865,12 +856,8 @@ mod tests {
         }
     }
 
-    /// ...and with the session opted in, it is sent the way a browser sends it.
-    ///
-    /// The whole of #612: this shape *is* the classic POST-CSRF, so an engine
-    /// that always refuses it cannot be the victim in a CSRF test, and its
-    /// silence reads as a clean result. The response stays opaque — that part
-    /// is not h5i being careful, it is what a browser does too.
+    /// ...and opted in, it is sent as a browser sends it (#612). The response
+    /// stays opaque: that half is what a browser does too.
     #[test]
     fn no_cors_with_credentials_is_browser_faithful_when_opted_in() {
         let from = origin("https://a.example/");
@@ -901,11 +888,8 @@ mod tests {
         }
     }
 
-    /// The opt-in widens exactly one thing.
-    ///
-    /// It is a switch about *credentials on an unreadable response*, not a way
-    /// to turn the same-origin policy off: a `cors` read still has to be
-    /// permitted by the server, and `same-origin` mode still refuses to cross.
+    /// The opt-in widens exactly one thing, not the same-origin policy: a
+    /// `cors` read is still checked, and `same-origin` still refuses to cross.
     #[test]
     fn the_opt_in_does_not_widen_anything_else() {
         let from = origin("https://a.example/");

@@ -1166,12 +1166,8 @@ impl Script {
     }
 
     /// Deliver `load` and `error` to the elements whose subresources have
-    /// resolved, and say whether anything was dispatched.
-    ///
-    /// Called after layout rather than before, because that is when Blitz
-    /// starts the fetch for a resource the page just added: an `<img>` appended
-    /// by script has no outcome to report until the tree has been resolved
-    /// once.
+    /// resolved, and say whether anything was dispatched. After layout: see
+    /// [`crate::engine::Page::deliver_resource_events`].
     pub fn fire_resource_events(&mut self) -> bool {
         match self.eval_value("__h5iFireResourceEvents()") {
             Ok(value) => value == "true",
@@ -1182,9 +1178,7 @@ impl Script {
         }
     }
 
-    /// Hand the realm the table of subresource outcomes the document is
-    /// filling in, so `load` and `error` can be fired at the elements that
-    /// asked for them.
+    /// Hand the realm the table of subresource outcomes the document fills in.
     pub fn set_resource_log(&mut self, log: crate::net::ResourceLog) {
         *self.host.resources.borrow_mut() = log;
     }

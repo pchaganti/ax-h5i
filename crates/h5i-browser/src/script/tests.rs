@@ -3768,16 +3768,11 @@ fn the_eagerly_parsed_prelude_stays_within_its_budget() {
     // Force prelude growth to be reviewed; move optional APIs into `TIERS` when
     // possible. This is a size budget, not a stable performance benchmark.
     //
-    // Raised from 281 for the two capabilities in h5i-dev/h5i#609/#610/#611:
-    // the sweep that delivers `load` and `error` to the elements that asked for
-    // a subresource, and the hand-off that turns `form.submit()` into a real
-    // request. Neither can live in a tier — the first runs on every page that
-    // has an image and the second on every page that has a form — and both are
-    // load-bearing for a security tool: without them `<img src=x onerror=…>`
-    // and a POST flow are silent, which reads as a clean result. The encoding
-    // half of the submission is deliberately in Rust rather than here, so what
-    // the page pays for is the entry list and the hand-off, not three
-    // enctypes.
+    // Raised from 281 for #609/#610/#611: the sweep that delivers `load` and
+    // `error`, and the hand-off that makes `form.submit()` a real request.
+    // Neither can be a tier (images and forms are on every page), and without
+    // them a payload and a POST flow are silent, which reads as a clean result.
+    // The submission's *encoding* is in Rust so the page does not pay for it.
     const BUDGET_KIB: usize = 283;
 
     assert!(
@@ -7288,18 +7283,15 @@ fn assigning_the_width_clears_the_surface() {
     );
 }
 
-// ── the two payload shapes an XSS test is written in ─────────────────────────
+// ── the two payload shapes an XSS test is written in (#609, #610) ───────────
 //
-// h5i-dev/h5i#609 and #610. The events were never dispatched, so
-// `<img src=x onerror=…>` and `<svg onload=…>` did nothing here — a real
-// finding read as no finding, which is the worst failure a security tool has.
+// The events were never dispatched, so `<img src=x onerror=…>` and
+// `<svg onload=…>` did nothing: a real finding read as no finding.
 
 /// A subresource that did not arrive fires `error` on the element that asked.
 ///
-/// The policy in these tests grants nothing, so the fetch is refused and the
-/// element hears about it. That is the same path a 404 takes: what the page
-/// gets told is "this did not load", and which of the two it was lives in the
-/// receipt, where it belongs.
+/// The policy grants nothing, so the fetch is refused. Same path a 404 takes:
+/// the page is told "this did not load", and which it was is in the receipt.
 #[test]
 fn a_subresource_that_failed_fires_error_on_the_element_that_asked() {
     let (page, _broker) = run_page(
@@ -7315,9 +7307,8 @@ fn a_subresource_that_failed_fires_error_on_the_element_that_asked() {
     );
 }
 
-/// The same fact through `addEventListener`, which is the half of #610 that is
-/// not about inline attributes at all: a page branching on whether an image
-/// arrived took the wrong branch however it listened.
+/// The half of #610 that is not about inline attributes: a page branching on
+/// whether an image arrived took the wrong branch however it listened.
 #[test]
 fn a_subresource_failure_reaches_an_added_listener_too() {
     let (page, _broker) = run_page(
@@ -7336,8 +7327,8 @@ fn a_subresource_failure_reaches_an_added_listener_too() {
     );
 }
 
-/// `<svg onload=…>`, which waits on no resource of its own and so is the one
-/// shape no amount of subresource bookkeeping would have reached.
+/// `<svg onload=…>` waits on no resource, so no subresource bookkeeping
+/// reaches it.
 #[test]
 fn an_svg_fires_load_once_it_is_in_the_document() {
     let (page, _broker) = run_page(
@@ -7352,8 +7343,7 @@ fn an_svg_fires_load_once_it_is_in_the_document() {
     );
 }
 
-/// An element fires once per URL it holds, so a second pass is free and a
-/// changed `src` arms it again — which is what a browser does.
+/// Once per URL it holds, so a second pass is free and a changed `src` re-arms.
 #[test]
 fn a_resource_event_fires_once_per_url() {
     let (page, _broker) = run_page(
@@ -7376,13 +7366,11 @@ fn a_resource_event_fires_once_per_url() {
 
 // ── forms that submit themselves ─────────────────────────────────────────────
 
-/// `form.submit()` produces a request. h5i-dev/h5i#611.
+/// `form.submit()` produces a request (#611). It used to build the entry list
+/// and drop it, so no POST flow could be driven.
 ///
-/// It used to build the entry list and drop it on the floor, so a POST-based
-/// flow could not be driven at all and a POST CSRF could not be demonstrated
-/// end to end. The request is left for the session to send rather than sent
-/// from inside the realm — see [`crate::engine::NavigationSlot`] — so this
-/// reads the slot rather than the wire.
+/// Left for the session to send, not sent from the realm, so this reads the
+/// slot rather than the wire. See [`crate::engine::NavigationSlot`].
 #[test]
 fn form_submit_from_script_produces_the_request() {
     let (mut page, _broker) = run_page(
@@ -7403,8 +7391,7 @@ fn form_submit_from_script_produces_the_request() {
     );
 }
 
-/// A `GET` form puts its fields in the query and *replaces* whatever the
-/// action carried, which is the part of the algorithm that surprises people.
+/// A `GET` form *replaces* whatever query its action carried.
 #[test]
 fn a_get_form_submits_through_the_query() {
     let (mut page, _broker) = run_page(
@@ -7422,9 +7409,8 @@ fn a_get_form_submits_through_the_query() {
     assert!(submission.body.is_empty());
 }
 
-/// `requestSubmit` fires a cancelable `submit` first, and a listener that
-/// prevents it stops the request. The difference from `submit()` is the whole
-/// reason they are two functions.
+/// `requestSubmit` fires a cancelable `submit` first, and preventing it stops
+/// the request. That difference is why it and `submit()` are two functions.
 #[test]
 fn a_prevented_submit_event_stops_the_request() {
     let (mut page, _broker) = run_page(
@@ -7442,8 +7428,8 @@ fn a_prevented_submit_event_stops_the_request() {
     );
 }
 
-/// ...and without the listener, clicking the button submits, because that is
-/// the button's activation behaviour rather than something the verb layer adds.
+/// ...and without the listener it submits: the button's own activation
+/// behaviour, not something the verb layer adds.
 #[test]
 fn clicking_a_submit_button_from_script_submits() {
     let (mut page, _broker) = run_page(
@@ -7461,8 +7447,8 @@ fn clicking_a_submit_button_from_script_submits() {
     );
 }
 
-/// An action this engine does not submit over is refused where the request is
-/// built, rather than becoming a navigation nobody expected.
+/// A scheme this engine does not submit over is refused where the request is
+/// built, not turned into a navigation nobody expected.
 #[test]
 fn a_form_with_a_scheme_this_engine_does_not_submit_produces_nothing() {
     let (mut page, _broker) = run_page(
