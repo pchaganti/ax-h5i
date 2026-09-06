@@ -366,9 +366,22 @@ impl Session {
         }
         let (_, viewport_height) = self.viewport();
         match scroll_for_key(&key.name, viewport_height as f64) {
-            Some(delta) => self.page.scroll_by(0.0, delta),
+            Some(delta) => self.scroll_and_notify(delta).0,
             None => false,
         }
+    }
+
+    /// Scroll, and let the page hear it.
+    ///
+    /// Every way of scrolling goes through here — the verb, the wheel and the
+    /// keys — because a lazy-loader listening for the event should not care
+    /// which of them moved the page. See [`crate::engine::Page::scrolled`].
+    fn scroll_and_notify(&mut self, delta: f64) -> (bool, Vec<crate::script::host::RequestLink>) {
+        let moved = self.page.scroll_by(0.0, delta);
+        if !moved || !self.page.has_script() {
+            return (moved, Vec::new());
+        }
+        (moved, self.page.scrolled().unwrap_or_default())
     }
 
     /// Add a frame to `out`, or remember that one is owed. The single place the
@@ -2009,17 +2022,25 @@ fn control_verb_inner(
         // loop asking for more page that does not exist.
         Verb::Scroll => {
             let by = request.get("by").and_then(Value::as_f64).unwrap_or(0.0);
-            let moved = session.page.scroll_by(0.0, by);
-            let (_, offset) = session.page.scroll_offset();
-            (
-                json!({
-                    "ok": true,
-                    "moved": moved,
-                    "offset": offset,
-                    "content_height": session.page.content_height(),
-                }),
-                moved,
-            )
+            // A scroll is an event before it is an offset. The page's own
+            // lazy-loader is listening for it, and the intersection observers
+            // are re-checked by the settle that follows, so the content the
+            // gesture was meant to reveal is on the page before this replies.
+            let (moved, caused) = session.scroll_and_notify(by);
+            let scripted = moved && session.page.has_script();
+            let mut reply = json!({
+                "ok": true,
+                "moved": moved,
+                "offset": session.page.scroll_offset().1,
+                "content_height": session.page.content_height(),
+            });
+            if scripted {
+                reply["caused_requests"] = json!(caused);
+                reply["settled"] = json!(
+                    session.page.settled().map(|s| s.render()).unwrap_or_default()
+                );
+            }
+            (reply, moved)
         }
 
         Verb::Navigate => {
@@ -3437,7 +3458,7 @@ fn handle_with(
                     .get("deltaY")
                     .and_then(Value::as_f64)
                     .unwrap_or(0.0);
-                session.page.scroll_by(0.0, delta)
+                session.scroll_and_notify(delta).0
             }
             Some("mouseReleased") => {
                 let x = message.get("x").and_then(Value::as_f64).unwrap_or(0.0) as f32;
@@ -5696,6 +5717,80 @@ mod tests {
         assert!(reply["settled"].is_string(), "the reply says whether it finished");
     }
 
+    /// The gesture a lazy-loading page is written against.
+    ///
+    /// A scroll that moves the viewport and tells nobody is the shape of the
+    /// "scrolling loads nothing here" this engine used to report: the offset
+    /// changed, the page's own handler never ran, and the loop's "stop when a
+    /// scroll adds nothing" ended it at the first round.
+    #[test]
+    fn a_scroll_fires_the_page_s_own_scroll_handler() {
+        let mut session = scripted_session_with(
+            "<html><body><div id='l' style='height:2000px'></div><script>\
+             window.addEventListener('scroll', () => { \
+               const p = document.createElement('p'); p.textContent = 'loaded more'; \
+               document.body.appendChild(p); });\
+             </script></body></html>",
+        );
+
+        let (reply, _) = control_verb(&mut session, &json!({"verb": "scroll", "by": 300.0}));
+
+        assert_eq!(reply["moved"], true, "{reply:?}");
+        assert!(
+            session.page.snapshot().render().contains("loaded more"),
+            "the handler ran and the agent can see it:\n{}",
+            session.page.snapshot().render()
+        );
+        assert!(reply["settled"].is_string(), "the reply says whether it finished");
+    }
+
+    /// And a scroll with nowhere to go stays silent: a page at its end must not
+    /// keep firing handlers for a gesture that moved nothing.
+    #[test]
+    fn a_scroll_that_cannot_move_fires_nothing() {
+        let mut session = scripted_session_with(
+            "<html><body><p>short</p><script>\
+             window.addEventListener('scroll', () => { \
+               document.body.appendChild(document.createElement('hr')); });\
+             </script></body></html>",
+        );
+
+        let (reply, _) = control_verb(&mut session, &json!({"verb": "scroll", "by": 300.0}));
+
+        assert_eq!(reply["moved"], false, "{reply:?}");
+        assert!(reply.get("caused_requests").is_none(), "{reply:?}");
+        assert!(
+            !session.page.snapshot().render().contains("separator"),
+            "nothing moved, so no handler should have run"
+        );
+    }
+
+    /// The same for a person at the live view: the wheel is a scroll too, and a
+    /// page that loads more as you go should do it for the human as well.
+    #[test]
+    fn a_wheel_from_the_viewer_fires_the_handler_the_verb_does() {
+        let mut session = scripted_session_with(
+            "<html><body><div style='height:2000px'></div><script>\
+             window.addEventListener('scroll', () => { \
+               const p = document.createElement('p'); p.textContent = 'loaded more'; \
+               document.body.appendChild(p); });\
+             </script></body></html>",
+        );
+
+        let out = handle(
+            &mut session,
+            &json!({"type":"input_mouse","eventType":"mouseWheel","deltaY": 300.0}),
+        )
+        .unwrap();
+
+        assert_eq!(out.len(), 1, "a real scroll redraws");
+        assert!(
+            session.page.snapshot().render().contains("loaded more"),
+            "the wheel moved the page and the page never heard it:\n{}",
+            session.page.snapshot().render()
+        );
+    }
+
     /// A session that loaded four hundred subresources has a log an agent should
     /// be able to ask a question of rather than read whole.
     #[test]
@@ -6105,15 +6200,24 @@ mod tests {
         // The property neither reference engine has, and it turns out to be
         // stronger than "the wait is cheap".
         //
-        // The page arms a one second timer. Because the settle runs on a *virtual*
-        // clock and runs to quiescence, that timer has already fired by the time
-        // the session exists, so the wait does not wait, it answers. Both
-        // reference engines would have spent a real second here, or given up early
-        // on a wall-clock heuristic and reported a page that had not finished.
+        // The page arms a five second timer. Because the settle runs on a
+        // *virtual* clock and runs to quiescence, that timer has already fired by
+        // the time the session exists, so the wait does not wait, it answers. Both
+        // reference engines would have spent five real seconds here, or given up
+        // early on a wall-clock heuristic and reported a page that had not
+        // finished.
+        //
+        // Five rather than one, and the reason is the assertion below: what it
+        // must catch is an engine that spent the delay in real time, so the
+        // page's delay has to stand well clear of how much two session builds on
+        // a shared runner can differ. One second did not: this failed CI at
+        // 1.517s against a 1.009s control, eight milliseconds outside its slack.
+        // Virtual seconds cost nothing, so a longer timer is a free way to buy
+        // signal. Kept under `SETTLE_BUDGET_MS`, which is virtual too.
         let page = "<html><body><div id='host'></div><script>\
                     setTimeout(() => { const p = document.createElement('p'); \
                     p.textContent = 'late'; document.querySelector('#host').appendChild(p); \
-                    }, 1000);</script></body></html>";
+                    }, 5000);</script></body></html>";
 
         // The same page with its timer already resolved, as a control. What the
         // wait costs has to be compared against what building a session costs
@@ -6147,9 +6251,12 @@ mod tests {
             a["waited_ms"], 0,
             "the page's second was spent before the verb was served: {a:?}"
         );
+        // Two seconds of slack against five seconds of page delay: wide enough
+        // that a busy runner cannot fail it, narrow enough that an engine which
+        // actually slept the delay cannot pass it.
         assert!(
-            real < control_real + std::time::Duration::from_millis(500),
-            "a page's own second of delay costs the agent nothing: {real:?}, \
+            real < control_real + std::time::Duration::from_secs(2),
+            "a page's own five seconds of delay cost the agent nothing: {real:?}, \
              against {control_real:?} for the same page with nothing to wait for"
         );
 
