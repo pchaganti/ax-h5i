@@ -174,9 +174,12 @@ jobs:
       - name: Build
         env:
           H5I_SKIP_WEB_BUILD: "1"
-        run: |
-          cargo build --release --locked --target ${{ matrix.target }} \
-            -p ${{ env.BINARY_NAME }} -p ${{ env.PLUGIN_NAME }}
+        # Folded (`>-`): YAML joins these into one line before any shell sees
+        # them. This step sets no `shell:`, so Windows runs PowerShell, where a
+        # `\` continuation is not one — it reached cargo as an argument in v0.4.1.
+        run: >-
+          cargo build --release --locked --target ${{ matrix.target }}
+          -p ${{ env.BINARY_NAME }} -p ${{ env.PLUGIN_NAME }}
 
       # ── Package ───────────────────────────────────────────────────────────
 
