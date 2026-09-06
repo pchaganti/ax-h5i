@@ -580,8 +580,13 @@ impl Walker<'_> {
                 // Not for a ref-taking element: its name is how an agent tells one
                 // control from another. Not for `code`, whose whole point is that its
                 // text is carried verbatim.
+                //
+                // A `clickable` is the exception to the ref rule: it is a
+                // wrapper that happens to carry a handler, so what is inside it
+                // is still structure the reader needs, and swallowing a whole
+                // card into one line would lose more than the ref is worth.
                 let hoisting = is_leaf
-                    && !takes_ref
+                    && (!takes_ref || role == ReadRole::Clickable)
                     && role != ReadRole::Code
                     && hoists_a_block(self.doc, node);
 
@@ -823,7 +828,45 @@ pub(crate) fn describe(tag: &str, node: &Node) -> Option<Descriptor> {
 
     let input_type = attr_of(node, "type").map(str::to_ascii_lowercase);
     let has_href = attr_of(node, "href").is_some();
-    role_for(tag, input_type.as_deref(), has_href)
+    role_for(tag, input_type.as_deref(), has_href).or_else(|| {
+        // Last, so nothing that has a role of its own is relabelled: a
+        // `<button onclick>` is a button. This is only for the element whose
+        // sole reason to be actionable is the handler the page put on it, and
+        // without it that element got no line and no `@ref`, so the handler
+        // could not be reached from a verb at all — which reads as a page that
+        // ignores its own markup.
+        has_activation_handler(node).then_some(Descriptor {
+            role: ReadRole::Clickable,
+            level: 0,
+            takes_ref: true,
+            is_leaf: true,
+        })
+    })
+}
+
+/// The inline handler attributes that make an element respond to being clicked.
+///
+/// Pointer activation only. A `<div onmouseover>` is not something an agent can
+/// act on with `click`, and giving it a ref would be offering a verb that does
+/// not apply.
+const ACTIVATION_HANDLERS: [&str; 6] = [
+    "onclick",
+    "ondblclick",
+    "onmousedown",
+    "onmouseup",
+    "onpointerdown",
+    "onpointerup",
+];
+
+/// Whether the page made this element clickable with a handler attribute.
+///
+/// Attributes only. A listener added with `addEventListener` lives in the
+/// script realm and is not in the tree, so this reading cannot see it and does
+/// not pretend to.
+pub(crate) fn has_activation_handler(node: &Node) -> bool {
+    ACTIVATION_HANDLERS
+        .iter()
+        .any(|name| attr_of(node, name).is_some())
 }
 
 /// Whether this node or anything above it is `aria-hidden="true"`.

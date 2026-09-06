@@ -822,6 +822,16 @@ struct NetArgs {
     #[arg(long)]
     allow_any_remote: bool,
 
+    /// Let this session's pages send credentials cross-origin the way a browser
+    /// does: `mode: "no-cors"` with `credentials: "include"`.
+    ///
+    /// Refused by default, because an opaque response cannot be checked, so
+    /// nothing can show the server agreed. That refusal is also exactly the
+    /// classic POST-CSRF vector, which made h5i unable to act as the victim in
+    /// a CSRF test. Scoped to one session and named in `h5i browser status`.
+    #[arg(long = "permissive-cors")]
+    permissive_cors: bool,
+
     /// Append the request log here as JSON lines.
     #[arg(long, value_name = "PATH")]
     receipts: Option<PathBuf>,
@@ -2155,6 +2165,7 @@ fn build_policy(net: &NetArgs) -> Policy {
         .set_any_remote(net.allow_any_remote)
         .set_max_redirects(net.max_redirects)
         .set_max_response_bytes(net.max_response_bytes)
+        .set_cross_site_credentials(net.permissive_cors)
 }
 
 fn proxy_of(net: &NetArgs) -> Option<String> {
@@ -2365,6 +2376,13 @@ fn doctor(net: &NetArgs) -> Result<(), H5iError> {
         println!("allowlist  : {}", origins.join(", "));
     }
     println!("script     : not linked in this tier");
+    if policy.allows_cross_site_credentials() {
+        println!(
+            "cors       : PERMISSIVE (--permissive-cors) — a page may send this session's \
+             credentials cross-origin with `no-cors`, which a browser does and this engine \
+             otherwise refuses"
+        );
+    }
 
     // Prove the client can actually be built with these settings rather than
     // reporting a configuration that fails at the first fetch.

@@ -231,6 +231,29 @@ fn serialize(from: Option<&Origin>) -> String {
     }
 }
 
+/// How strictly this session holds the origin boundary.
+///
+/// One knob, and only one thing turns on it: whether a page may put the
+/// session's credentials on a request to another origin whose answer nobody can
+/// read. See [`Stance::Browser`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Stance {
+    /// The default. A credential does not cross an origin boundary on a request
+    /// that cannot be checked.
+    #[default]
+    Contained,
+    /// What a real browser does, opted into for one session.
+    ///
+    /// The refusal this lifts is a good default for containing an agent and a
+    /// bad one for testing a target, because it is exactly the classic
+    /// POST-CSRF vector: with it in force h5i cannot act as the victim, so a
+    /// negative result means "h5i declined" rather than "the target is safe"
+    /// (#612). Named in `h5i browser status` and part of the policy digest,
+    /// because a session that behaves differently about credentials must not be
+    /// one anybody is in by accident.
+    Browser,
+}
+
 /// Decide what to do about one request.
 pub fn plan(
     requester: Requester<'_>,
@@ -239,6 +262,7 @@ pub fn plan(
     headers: &[(String, String)],
     mode: Mode,
     credentials: Credentials,
+    stance: Stance,
 ) -> Plan {
     let from = match requester {
         Requester::Agent => {
@@ -281,10 +305,16 @@ pub fn plan(
         Mode::NoCors => {
             // Sendable, but the caller learns nothing. Credentials are the
             // same-origin default only, so a beacon does not carry a session.
-            if !matches!(credentials, Credentials::Include) {
+            //
+            // Credentialed `no-cors` is the one case the stance decides, and
+            // it decides it in both directions: a browser sends it, and this
+            // engine's default does not. See [`Stance`].
+            let send_cookies =
+                matches!(credentials, Credentials::Include) && matches!(stance, Stance::Browser);
+            if !matches!(credentials, Credentials::Include) || send_cookies {
                 Plan::Send {
                     origin_header: Some(serialize(from)),
-                    send_cookies: false,
+                    send_cookies,
                     preflight: None,
                     check_response: false,
                     exposure: Exposure::Opaque,
@@ -293,7 +323,10 @@ pub fn plan(
                 Plan::Blocked(
                     "`mode: \"no-cors\"` with `credentials: \"include\"` would send a \
                      credential to another origin and never be able to check that the \
-                     server agreed, because an opaque response cannot be read."
+                     server agreed, because an opaque response cannot be read. A browser \
+                     does send it, and that is the classic POST-CSRF vector: to test one, \
+                     open the session with `--permissive-cors`, which makes it behave like \
+                     a browser here and says so in `h5i browser status`."
                         .to_string(),
                 )
             }
@@ -545,6 +578,7 @@ mod tests {
             &[],
             Mode::Cors,
             Credentials::default(),
+            Stance::Contained,
         );
         match plan {
             Plan::Send {
@@ -577,6 +611,7 @@ mod tests {
             &[],
             Mode::Cors,
             Credentials::default(),
+            Stance::Contained,
         );
         match plan {
             Plan::Send {
@@ -644,6 +679,7 @@ mod tests {
             )],
             Mode::Cors,
             Credentials::default(),
+            Stance::Contained,
         );
         assert!(matches!(simple, Plan::Send { preflight: None, .. }));
 
@@ -656,6 +692,7 @@ mod tests {
             &[("content-type".into(), "application/json".into())],
             Mode::Cors,
             Credentials::default(),
+            Stance::Contained,
         );
         match json {
             Plan::Send {
@@ -676,6 +713,7 @@ mod tests {
             &[],
             Mode::Cors,
             Credentials::default(),
+            Stance::Contained,
         );
         assert!(matches!(delete, Plan::Send { preflight: Some(_), .. }));
     }
@@ -787,6 +825,7 @@ mod tests {
             &[],
             Mode::NoCors,
             Credentials::default(),
+            Stance::Contained,
         );
         match plan {
             Plan::Send {
@@ -804,7 +843,7 @@ mod tests {
     /// An opaque response cannot be checked, so a credential sent with one
     /// could never be shown to have been permitted.
     #[test]
-    fn no_cors_with_credentials_is_refused_outright() {
+    fn no_cors_with_credentials_is_refused_by_default() {
         let from = origin("https://a.example/");
         let refused = plan(
             Requester::Document(&from),
@@ -813,6 +852,85 @@ mod tests {
             &[],
             Mode::NoCors,
             Credentials::Include,
+            Stance::Contained,
+        );
+        match refused {
+            // The refusal has to name the way out, or an agent reading it
+            // concludes the target is safe rather than that h5i declined.
+            Plan::Blocked(why) => assert!(
+                why.contains("--permissive-cors"),
+                "the refusal must name the opt-in, got: {why}"
+            ),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    /// ...and with the session opted in, it is sent the way a browser sends it.
+    ///
+    /// The whole of #612: this shape *is* the classic POST-CSRF, so an engine
+    /// that always refuses it cannot be the victim in a CSRF test, and its
+    /// silence reads as a clean result. The response stays opaque — that part
+    /// is not h5i being careful, it is what a browser does too.
+    #[test]
+    fn no_cors_with_credentials_is_browser_faithful_when_opted_in() {
+        let from = origin("https://a.example/");
+        let sent = plan(
+            Requester::Document(&from),
+            &url("https://b.example/transfer"),
+            "POST",
+            &[],
+            Mode::NoCors,
+            Credentials::Include,
+            Stance::Browser,
+        );
+        match sent {
+            Plan::Send {
+                origin_header,
+                send_cookies,
+                check_response,
+                exposure,
+                preflight,
+            } => {
+                assert_eq!(origin_header.as_deref(), Some("https://a.example"));
+                assert!(send_cookies, "the credential is the whole point");
+                assert!(preflight.is_none(), "`no-cors` never preflights");
+                assert!(!check_response);
+                assert_eq!(exposure, Exposure::Opaque, "a browser cannot read it either");
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    /// The opt-in widens exactly one thing.
+    ///
+    /// It is a switch about *credentials on an unreadable response*, not a way
+    /// to turn the same-origin policy off: a `cors` read still has to be
+    /// permitted by the server, and `same-origin` mode still refuses to cross.
+    #[test]
+    fn the_opt_in_does_not_widen_anything_else() {
+        let from = origin("https://a.example/");
+        let read = plan(
+            Requester::Document(&from),
+            &url("https://b.example/secret"),
+            "GET",
+            &[],
+            Mode::Cors,
+            Credentials::Include,
+            Stance::Browser,
+        );
+        assert!(
+            matches!(read, Plan::Send { check_response: true, .. }),
+            "a cross-origin read still has to be checked against the response"
+        );
+
+        let refused = plan(
+            Requester::Document(&from),
+            &url("https://b.example/x"),
+            "GET",
+            &[],
+            Mode::SameOrigin,
+            Credentials::Include,
+            Stance::Browser,
         );
         assert!(matches!(refused, Plan::Blocked(_)));
     }
@@ -827,6 +945,7 @@ mod tests {
             &[],
             Mode::SameOrigin,
             Credentials::default(),
+            Stance::Contained,
         );
         match refused {
             Plan::Blocked(why) => assert!(why.contains("same-origin")),
@@ -846,6 +965,7 @@ mod tests {
             &[],
             Mode::Cors,
             Credentials::default(),
+            Stance::Contained,
         );
         assert!(matches!(
             plan,

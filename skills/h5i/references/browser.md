@@ -44,6 +44,24 @@ requests`, which is the log's whole point. The grant is fixed when the engine
 starts, so `--allow` on a second `open` is refused rather than ignored, and
 `--no-loopback` takes back the dev-server exemption.
 
+### Cross-site credentials
+
+A page here may not send this session's credentials to another origin on a
+request whose answer nobody can read: `mode: "no-cors"` with
+`credentials: "include"` is refused, because an opaque response cannot be
+checked. That is also the classic POST-CSRF shape, so with the refusal in force
+h5i cannot be the *victim* in a CSRF test and a negative result means "h5i
+declined", not "the target is safe".
+
+`h5i browser open … --permissive-cors` makes one session behave like a browser
+here. It is fixed at creation, part of the policy digest, and named in
+`h5i browser status`, so a finding gathered under it cannot be mistaken for one
+gathered without it. It widens nothing else: a cross-origin `cors` read still
+has to be permitted by the server. The jar still holds only the origin
+currently loaded, so a cross-*host* attack page has none of the target's
+cookies to send; two ports on one host are two origins and one jar, which is
+the shape a local CSRF lab has.
+
 ## Which engine
 
 `h5i browser` drives h5i's own engine. A box pinned to `--engine chromium` has
@@ -184,6 +202,23 @@ depended on its argument.
 
 Each of these takes either a `@ref` and the value, or a locator and the value.
 With a locator there is no ref: the locator is the handle.
+
+### When the page acts on its own
+
+With `--script`, a page can do two things that move the ground under a verb, and
+both are reported rather than left to be inferred:
+
+- **A form the page submits itself.** `form.submit()` from a handler, or a
+  `<form>` that submits on load, produces a real request. It goes out at the
+  verb boundary, through the broker and into the request log like any other, and
+  the reply carries `page_submitted` with where it went. The session has landed
+  on the answer by then, so **re-snapshot**: every `@ref` you hold describes the
+  page that is gone.
+- **`load` and `error` on subresources.** An `<img>`, `<script>`, `<link>` or
+  `<iframe>` that did or did not arrive fires at the element that asked, so
+  `<img src=x onerror=…>` and `<svg onload=…>` run. An element that only has a
+  handler attribute, such as `<div onclick=…>`, reads as role `clickable` and
+  takes a `@ref`, which is how you fire one.
 
 ## Recording and replaying
 

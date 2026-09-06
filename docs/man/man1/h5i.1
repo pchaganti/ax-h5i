@@ -957,7 +957,7 @@ Open a URL, making a session if there is not one already
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SS SYNOPSIS
-\fBopen\fR [\fB\-s\fR|\fB\-\-session\fR] [\fB\-\-new\fR] [\fB\-\-in\fR] [\fB\-\-allow\fR] [\fB\-\-no\-loopback\fR] [\fB\-\-script\fR] [\fB\-\-no\-sandbox\fR] [\fB\-\-secret\fR] [\fB\-\-identity\fR] [\fB\-\-width\fR] [\fB\-\-height\fR] [\fB\-\-expires\-in\fR] [\fB\-\-restore\fR] [\fB\-\-capture\fR] [\fB\-\-json\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIURL\fR> 
+\fBopen\fR [\fB\-s\fR|\fB\-\-session\fR] [\fB\-\-new\fR] [\fB\-\-in\fR] [\fB\-\-allow\fR] [\fB\-\-no\-loopback\fR] [\fB\-\-script\fR] [\fB\-\-permissive\-cors\fR] [\fB\-\-no\-sandbox\fR] [\fB\-\-secret\fR] [\fB\-\-identity\fR] [\fB\-\-width\fR] [\fB\-\-height\fR] [\fB\-\-expires\-in\fR] [\fB\-\-restore\fR] [\fB\-\-capture\fR] [\fB\-\-json\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIURL\fR> 
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SS OPTIONS
@@ -983,6 +983,11 @@ Refuse loopback too. It is reachable by default: it is the dev server
 .TP
 \fB\-\-script\fR
 Run the page\*(Aqs own JavaScript. Off by default: with script off, page\-borne prompt injection has no delivery channel at all
+.TP
+\fB\-\-permissive\-cors\fR
+Let this session\*(Aqs pages send credentials cross\-origin the way a browser does: `mode: "no\-cors"` with `credentials: "include"`.
+
+Refused by default, and the default is right for containing an agent: an opaque response cannot be read, so nothing can check that the server agreed. It is also the classic POST\-CSRF vector, so the refusal stopped h5i acting as the *victim* in a CSRF test \(em a negative result meant "h5i declined", not "the target is safe". Scoped to this session, part of its policy digest, and named in `h5i browser status`.
 .TP
 \fB\-\-no\-sandbox\fR
 Run the engine unconfined.

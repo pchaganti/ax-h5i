@@ -178,6 +178,8 @@ pub fn install(context: &mut Context) -> JsResult<()> {
         ("sseOpen", 1, sse_open),
         ("sseClose", 1, sse_close),
         ("sseDrain", 1, sse_drain),
+        ("resourceStatus", 1, resource_status),
+        ("submitForm", 4, submit_form),
     ];
 
     let api = boa_engine::object::ObjectInitializer::new(context).build();
@@ -1038,6 +1040,121 @@ fn attr_names(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRes
         out.push(JsValue::from(js_string!(name.as_str())), context)?;
     }
     Ok(out.into())
+}
+
+/// How a subresource turned out: the HTTP status, `0` for a request that never
+/// got an answer, and `null` for a URL this document never asked for.
+///
+/// The page reads this to decide between `load` and `error` on the element that
+/// asked. It reports only what this document already fetched, so it is not a
+/// probe: a URL nobody requested comes back `null` rather than being fetched to
+/// find out.
+fn resource_status(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let url = arg_string(args, 0, context)?;
+    let host = host(context)?;
+    let log = host.resources.borrow().clone();
+    let found = log.lock().ok().and_then(|log| log.status(&url));
+    Ok(match found {
+        Some(status) => JsValue::from(status as f64),
+        None => JsValue::null(),
+    })
+}
+
+/// Record the request a form the page submitted has turned into.
+///
+/// The entry list is built in the prelude, where the algorithm already lives;
+/// the *encoding* is done here, so that a form's body and the one
+/// `h5i websec replay` composes come out of one implementation. Recorded rather
+/// than sent — see [`crate::engine::NavigationSlot`] for why the page does not
+/// get to navigate itself out from under the caller.
+///
+/// Answers whether it was taken. `method="dialog"`, an empty action and a
+/// scheme this engine does not submit over are all a `false` here rather than a
+/// request nobody expected.
+fn submit_form(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let action = arg_string(args, 0, context)?;
+    let method = arg_string(args, 1, context)?.to_ascii_lowercase();
+    let enctype = arg_string(args, 2, context)?.to_ascii_lowercase();
+    let entries = arg_entries(args, 3, context)?;
+
+    // A form's method is `get` unless it says otherwise, and `dialog` closes
+    // the dialog it is in rather than reaching the network.
+    if method == "dialog" {
+        return Ok(JsValue::from(false));
+    }
+    let host = host(context)?;
+    let Ok(mut url) = host.base.join(&action) else {
+        return Ok(JsValue::from(false));
+    };
+    if !matches!(url.scheme(), "http" | "https") {
+        return Ok(JsValue::from(false));
+    }
+
+    let submission = if method == "post" {
+        let (body, content_type) = crate::engine::encode_form_body(&enctype, &entries);
+        crate::engine::Submission {
+            url,
+            document: host.base.clone(),
+            method: "POST".to_string(),
+            body,
+            content_type: Some(content_type),
+        }
+    } else {
+        // The query is *replaced*, not appended to: a `GET` form whose action
+        // carries one submits without it, which is the part of the algorithm
+        // that surprises people.
+        url.set_query(Some(&crate::engine::encode_form_query(&entries)));
+        url.set_fragment(None);
+        crate::engine::Submission {
+            url,
+            document: host.base.clone(),
+            method: "GET".to_string(),
+            body: Vec::new(),
+            content_type: None,
+        }
+    };
+
+    let slot = host.navigation.borrow().clone();
+    let Ok(mut slot) = slot.lock() else {
+        return Ok(JsValue::from(false));
+    };
+    *slot = Some(submission);
+    Ok(JsValue::from(true))
+}
+
+/// How many entries one form submission may carry.
+///
+/// A `formdata` listener can append without limit, and this is the one list
+/// that crosses from the realm into a request body. Bounded like every other
+/// page-controlled quantity here, and generously: a form with ten thousand
+/// fields is not a form.
+const MAX_FORM_ENTRIES: usize = 10_000;
+
+/// Read an argument that is an array of `[name, value]` pairs.
+///
+/// Anything that is not a pair is skipped rather than refused: the argument
+/// comes from the prelude, and a malformed entry is this engine's bug to find
+/// in a test, not a reason to fail a page's submission at runtime.
+fn arg_entries(
+    args: &[JsValue],
+    index: usize,
+    context: &mut Context,
+) -> JsResult<Vec<(String, String)>> {
+    let mut out = Vec::new();
+    let Some(object) = args.get(index).and_then(JsValue::as_object) else {
+        return Ok(out);
+    };
+    let length = (object.get(js_string!("length"), context)?.to_number(context)? as usize)
+        .min(MAX_FORM_ENTRIES);
+    for at in 0..length {
+        let Some(pair) = object.get(at as u32, context)?.as_object() else {
+            continue;
+        };
+        let name = pair.get(0u32, context)?.to_string(context)?.to_std_string_escaped();
+        let value = pair.get(1u32, context)?.to_string(context)?.to_std_string_escaped();
+        out.push((name, value));
+    }
+    Ok(out)
 }
 
 /// The session's agent string, so the prelude cannot hold a second copy that

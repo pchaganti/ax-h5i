@@ -112,6 +112,19 @@ pub enum BrowserCommands {
         #[arg(long)]
         script: bool,
 
+        /// Let this session's pages send credentials cross-origin the way a
+        /// browser does: `mode: "no-cors"` with `credentials: "include"`.
+        ///
+        /// Refused by default, and the default is right for containing an
+        /// agent: an opaque response cannot be read, so nothing can check that
+        /// the server agreed. It is also the classic POST-CSRF vector, so the
+        /// refusal stopped h5i acting as the *victim* in a CSRF test — a
+        /// negative result meant "h5i declined", not "the target is safe".
+        /// Scoped to this session, part of its policy digest, and named in
+        /// `h5i browser status`.
+        #[arg(long)]
+        permissive_cors: bool,
+
         /// Run the engine unconfined.
         ///
         /// By default a session on this machine runs in a process-tier sandbox:
@@ -1148,6 +1161,7 @@ pub fn run(action: BrowserCommands) -> anyhow::Result<()> {
             allow,
             no_loopback,
             script,
+            permissive_cors,
             no_sandbox,
             secrets,
             #[cfg(feature = "identity")]
@@ -1168,6 +1182,7 @@ pub fn run(action: BrowserCommands) -> anyhow::Result<()> {
                 allow,
                 no_loopback,
                 script,
+                permissive_cors,
                 no_sandbox,
                 secrets,
                 #[cfg(feature = "identity")]
@@ -1766,6 +1781,8 @@ struct StartOptions {
     allow: Vec<String>,
     no_loopback: bool,
     script: bool,
+    /// Behave like a browser about cross-site credentials. See the flag.
+    permissive_cors: bool,
     no_sandbox: bool,
     secrets: Vec<String>,
     #[cfg(feature = "identity")]
@@ -1839,6 +1856,9 @@ fn creation_flags(opts: &StartOptions) -> Vec<&'static str> {
     }
     if opts.script {
         set.push("`--script`");
+    }
+    if opts.permissive_cors {
+        set.push("`--permissive-cors`");
     }
     if opts.no_loopback {
         set.push("`--no-loopback`");
@@ -2030,6 +2050,7 @@ fn start(
             pid: spawned.pid,
         },
         logs: spawned.logs.clone(),
+        permissive_cors: opts.permissive_cors,
     };
     bs::write(root, &session)?;
     // The default follows the newest session whether or not it was named, so a
@@ -2722,6 +2743,9 @@ fn net_args(opts: &StartOptions) -> Vec<String> {
     if opts.no_loopback {
         argv.push("--no-loopback".into());
     }
+    if opts.permissive_cors {
+        argv.push("--permissive-cors".into());
+    }
     // Only when it differs from the default, which is what every other flag here already does,
     // and the reason is not tidiness.
     #[cfg(feature = "identity")]
@@ -2756,10 +2780,11 @@ fn host_policy_digest(opts: &StartOptions) -> String {
     let mut allow = granted_origins(opts);
     allow.sort();
     let material = format!(
-        "host\nallow={}\nloopback={}\nscript={}\n",
+        "host\nallow={}\nloopback={}\nscript={}\npermissive_cors={}\n",
         allow.join(","),
         !opts.no_loopback,
-        opts.script
+        opts.script,
+        opts.permissive_cors
     );
     format!("sha256:{:x}", Sha256::digest(material.as_bytes()))
 }
@@ -3762,6 +3787,15 @@ fn print_summary(session: &bs::Session) {
         }
     );
     println!("  policy   : {}", session.policy_digest);
+    // Named, not left to the digest. A digest says two sessions differ; this
+    // says how, and it is the difference that changes what a finding means.
+    if session.permissive_cors {
+        println!(
+            "  cors     : {} — a page here may send this session's credentials \
+             cross-origin with `no-cors`, as a browser does",
+            style("permissive (--permissive-cors)").yellow()
+        );
+    }
     if let Some(from) = &session.restored_from {
         println!("  storage  : inherited from {from}");
     }

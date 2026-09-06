@@ -206,8 +206,8 @@ next verb quietly landing somewhere it never asked for.
 Opening a URL in a browser that is already up means *go there*. So `open`
 navigates the session it finds, and `--new` is how you say you meant a second
 one. The flags that only make sense at creation (`--allow`, `--in`, `--script`,
-`--no-loopback`, `--expires-in`, `--restore`, `--capture`) are *refused* rather than ignored
-when a session is reused: a session's policy is fixed when its engine starts, so
+`--no-loopback`, `--permissive-cors`, `--expires-in`, `--restore`, `--capture`) are *refused*
+rather than ignored when a session is reused: a session's policy is fixed when its engine starts, so
 accepting a grant and doing nothing with it would be a grant the caller believes
 it made.
 
@@ -243,6 +243,36 @@ that back.
 The grant is the page and not "and whatever this page pulls in". An off-origin
 subresource is still refused, and still says so in the request log, which is the
 part a wider default would have given away.
+
+#### Cross-site credentials, and the one flag that changes them
+
+A page here may not send this session's credentials to another origin on a
+request whose answer nobody can read. In fetch terms that is `mode: "no-cors"`
+with `credentials: "include"`, and h5i refuses it: an opaque response cannot be
+checked, so nothing could ever show the server agreed.
+
+That is the right default for containing an agent and the wrong one for testing
+a target, because the shape being refused is the classic POST-based CSRF. With
+the refusal in force h5i cannot act as the *victim*, so a negative result means
+"h5i declined", not "the target is safe".
+
+`--permissive-cors` makes one session behave like a browser here:
+
+```bash
+h5i browser open https://attacker.example --script --permissive-cors
+```
+
+It is scoped to that session, part of its policy digest, and named on the `open`
+banner and in `h5i browser status`, so nobody is in it by accident and no
+finding gathered under it can be mistaken for one gathered without it. It widens
+exactly that: a cross-origin `cors` read still has to be permitted by the server,
+and `mode: "same-origin"` still refuses to cross.
+
+One thing it does not do is put a credential where there was not one. The cookie
+jar holds the session for the origin currently loaded and drops the rest on
+navigation, so a cross-host attack page has nothing of the target's to send.
+Two ports on one host are two origins and one jar, which is the shape a local
+CSRF lab has.
 
 ### Browser identities
 
@@ -431,6 +461,27 @@ media: 1 element(s), 1 with timed text, 412 cue(s) read
 …
 --- END UNTRUSTED PAGE CONTENT ---
 ```
+
+### When the page acts on its own
+
+With `--script`, a page can move the ground under a verb, and both ways it can
+are reported rather than left to be inferred.
+
+**A form the page submits itself.** `form.submit()` from a handler, or a form
+that submits on load, produces a real request. It is not sent from inside the
+page, because this engine drives navigation through its own verbs so that an
+agent and a receipt both see it. It goes out at the verb boundary instead,
+through the broker and into the request log like any other. The reply carries
+`page_submitted` with where it went, and the session has landed on the answer by
+then, so take a new `snapshot`: every `@ref` you hold describes the page that is
+gone.
+
+**`load` and `error` on subresources.** An `<img>`, `<script>`, `<link>` or
+`<iframe>` that did or did not arrive fires at the element that asked for it, so
+`<img src=x onerror=…>` and `<svg onload=…>` behave the way they do in a
+browser. An element whose only interactivity is a handler attribute, such as
+`<div onclick=…>`, reads as role `clickable` and takes a `@ref`, which is how
+you fire one.
 
 ## Video transcripts
 

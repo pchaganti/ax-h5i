@@ -6745,7 +6745,9 @@ that matters:
   reported as `type: "opaque"` so a page can tell it from a failure. `no-cors`
   with `credentials: "include"` is refused outright: an opaque response cannot
   be checked, so a credential sent with one could never be shown to have been
-  permitted.
+  permitted. *Made opt-out by §B24.4: still the default, and
+  `--permissive-cors` lifts it for one session, because the refusal is also
+  what stopped h5i acting as the victim in a CSRF test.*
 
 Deliberately not modelled: CORB/ORB, which defend a shared process against a
 timing side channel. Every document here gets its own realm and the realm is
@@ -8250,6 +8252,10 @@ drives navigation through its own verbs so that an agent and a receipt both see
 it, and a form submitting itself out from under that would be a request nothing
 decided on.
 
+*Revised by §B24.3: the reasoning holds and the boundary was in the wrong
+place. Neither navigates from inside the realm, but both now produce a real
+request, which the session sends at the verb boundary and reports.*
+
 **A bug found by this that had nothing to do with forms.** `form.elements` came
 back empty, because it compared `formOwnerOf(el) === this` — and `wrap()` hands
 back the `observed` proxy while a getter runs with the raw target as `this`, by
@@ -8935,6 +8941,108 @@ branch a single run said something that seven runs did not.**
 R13 and D14, the step-by-step orders with their "Built" annotations.
 `design-runner.md` and `design-detect.md` keep the design sections (R1 to R12b,
 D1 to D13); this is the record of the work landing.
+
+## B24. Four reports from an XSS lab, 2026-09-05
+
+h5i-dev/h5i#609 to #612, all found while writing a `websec` tutorial and all
+the same kind of problem: the engine did the *work* and told nobody, so a real
+finding read as no finding. That is the worst failure mode a security tool has,
+and three of the four were one root cause.
+
+### B24.1 The events that were decided and never delivered
+
+`<img src=x onerror=…>` and `<svg onload=…>` are the two commonest XSS payload
+shapes there are, and against this engine both did nothing. #609 reported it as
+"inline handlers never fire", which is not what was wrong: the handler compiled,
+`el.onerror` read back as a function, and `<button onclick>` worked. What was
+missing was underneath — **element-level `load` and `error` were never
+dispatched at all** (#610, which reported the same hole through
+`addEventListener` and so pointed straight at it).
+
+Blitz fetches subresources through the document's `NetProvider`, hands the bytes
+to layout, and drops the outcome. So the 404 was in the request log and nothing
+in the page could see it. The fix is a `ResourceLog` the provider writes as each
+fetch completes, keyed by both the URL asked for and the URL answered, because a
+redirected image is `src` in the markup and the final URL in the outcome. The
+realm reads it through `api.resourceStatus` and sweeps the elements that name a
+resource, firing once per URL an element holds — so a changed `src` arms it
+again, and re-running the sweep costs nothing. `<script src>` is fetched by
+`run_scripts` rather than by the provider and had to be recorded there by hand;
+missing that line would have left exactly one subresource kind silent.
+
+The sweep runs **after layout, not before**, and that ordering is the whole of
+why it works for script-added elements: Blitz starts the fetch when it resolves
+the tree, so an `<img>` a script appended has no outcome until the layout pass
+has run. Bounded at three passes, because a page whose `onerror` appends a
+broken image is a loop.
+
+### B24.2 The element nothing could click
+
+The other half of #609, and a separate defect: `<div onclick=…>` has no implicit
+role, so the snapshot walker gave it no line and no `@ref`, and the handler a
+browser would run could not be fired from any verb. The report read that as "the
+handler never fires"; it never *ran*, because nothing could reach it.
+
+It gets its own role word, `clickable`, rather than being called a button. It is
+not one — no keyboard activation, nothing a screen reader announces — and
+reporting it as a button would be this engine disagreeing with the accessibility
+tree to save a word. Pointer-activation attributes only: `<div onmouseover>` is
+not something `click` applies to, and a ref there offers a verb that does
+nothing. It is also the one ref-taking role that still hoists, because a
+clickable card is a wrapper that happens to carry a handler, and swallowing its
+heading and its link into one line would lose more than the ref is worth.
+
+### B24.3 §B20.13's boundary, revisited
+
+§B20.13 built the submission algorithm and stopped: "Neither *navigates*, and
+that is deliberate rather than unfinished." #611 is what that costs. A form
+never submitted, by either route — `form.submit()` was callable, threw nothing
+and did nothing — so a login or a checkout could not be driven and a POST CSRF
+could not be shown end to end.
+
+The reasoning behind the boundary was right and the boundary was in the wrong
+place. What this engine cannot allow is a page *navigating out from under a
+verb*: an agent mid-read must not have the document change under it. It does not
+follow that the request must never be made. So the realm records the request in
+a `NavigationSlot` — the same slot Blitz's own submission algorithm fills, so
+the two produce one request between them rather than two — and it goes out at
+the verb boundary, through the broker, receipted like everything else, with the
+reply carrying `page_submitted` so an agent knows every `@ref` it holds is
+stale. A form that submits on load is followed by the `PageFactory`, bounded at
+three hops, and the page says so in a note.
+
+Half of #611 was also not a bug. "Clicking a submit button sends nothing" was a
+click on `@e1`, which was the text field; `@e2` submitted correctly. Worth
+recording, because the report was otherwise accurate and the reproduction was
+the part that was wrong.
+
+The encoding lives in Rust rather than in the prelude, which is not only about
+the size budget: `encode_form_body` is now the one implementation of what a form
+sends, shared with the multipart machinery `websec replay` already had.
+
+### B24.4 §B17.2's refusal, made opt-out
+
+`no-cors` with `credentials: "include"` was "refused outright", and §B17.2's
+reason still holds: an opaque response cannot be checked, so a credential sent
+with one could never be shown to have been permitted. #612 is the other side of
+it. That shape *is* the classic POST-CSRF, so an engine that always refuses it
+cannot act as the **victim** in a CSRF test, and its refusal reads as a clean
+result. A negative meant "h5i declined", not "the target is safe".
+
+A `cors::Stance` on the policy decides it, and only that: a cross-origin `cors`
+read still has to be permitted by the server, and `same-origin` mode still
+refuses to cross. `--permissive-cors` is fixed at session creation, folded into
+the policy digest, and printed on the `open` banner and in `h5i browser status`
+— a mode that changes what a page may do with a credential and does not announce
+itself is the kind of quiet difference that makes a result unreproducible. The
+refusal now names the flag, because a refusal an agent cannot act on is how a
+declined test becomes a passed one.
+
+One limit stated rather than papered over: the flag makes the session *willing*
+to send a credential, not able to invent one. The jar holds only the origin
+currently loaded and drops the rest on navigation, so a cross-*host* attack page
+has nothing of the target's to send. Two ports on one host are two origins and
+one jar, which is the shape a local CSRF lab has.
 
 ## R13. The order
 

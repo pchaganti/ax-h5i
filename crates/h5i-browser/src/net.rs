@@ -928,6 +928,7 @@ impl LocalBroker {
                     &context.headers,
                     context.mode,
                     context.credentials,
+                    self.policy.cors_stance(),
                 );
 
                 if let crate::cors::Plan::Blocked(why) = &plan {
@@ -1706,6 +1707,7 @@ impl LocalBroker {
                     // `withCredentials` is not exposed, so this is the
                     // default: cookies same-origin, never across.
                     crate::cors::Credentials::SameOrigin,
+                    self.policy.cors_stance(),
                 ))
             }
         };
@@ -2547,6 +2549,53 @@ fn find_crlf_crlf(bytes: &[u8]) -> Option<usize> {
     bytes.windows(4).position(|window| window == b"\r\n\r\n")
 }
 
+/// How every subresource this document asked for turned out.
+///
+/// The page's own `load` and `error` events are the only reason this exists.
+/// Blitz fetches images, stylesheets and frames on its own schedule and hands
+/// the bytes straight to layout, so by the time the script realm is built the
+/// outcome of each one has been decided and thrown away — which is why
+/// `<img src=x onerror=…>` did nothing here while the 404 sat plainly in the
+/// request log. Recorded by URL because that is the only thing the two sides
+/// share: Blitz's `Request` does not say which element asked.
+///
+/// Shared with the realm rather than copied, because a resource the page adds
+/// later resolves after the realm exists.
+pub type ResourceLog = Arc<std::sync::Mutex<ResourceOutcomes>>;
+
+/// The table behind a [`ResourceLog`].
+#[derive(Debug, Default)]
+pub struct ResourceOutcomes {
+    /// URL to HTTP status, with `0` for a request that never got an answer:
+    /// refused by policy, or a connection that failed. Both are `error` to a
+    /// page, and the distinction is in the receipt, which is where it belongs.
+    by_url: std::collections::HashMap<String, u16>,
+}
+
+impl ResourceOutcomes {
+    /// Record one outcome, under both the URL asked for and the one answered.
+    ///
+    /// Both, because a redirected image is `src` in the markup and the final
+    /// URL in the outcome, and the page will ask about the first.
+    pub fn record(&mut self, asked: &Url, outcome: &FetchOutcome) {
+        let status = match (outcome.error.as_ref(), outcome.status) {
+            (Some(_), _) | (None, None) => 0,
+            (None, Some(status)) => status,
+        };
+        self.by_url.insert(asked.to_string(), status);
+        self.by_url.insert(outcome.final_url.to_string(), status);
+    }
+
+    /// The status this URL came back with, or `None` if it was never asked for.
+    pub fn status(&self, url: &str) -> Option<u16> {
+        self.by_url.get(url).copied()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.by_url.is_empty()
+    }
+}
+
 /// Adapts the broker to Blitz's [`NetProvider`].
 pub struct BrokerNet {
     broker: Arc<dyn crate::broker::Broker>,
@@ -2559,11 +2608,26 @@ pub struct BrokerNet {
     /// the box's dev server, which is precisely what [`Policy::check_from`]
     /// exists to refuse. `None` only for a document with no origin of its own.
     document: Option<Url>,
+    /// Where each subresource's fate is written down, for the page to hear
+    /// about as a `load` or an `error`.
+    resources: ResourceLog,
 }
 
 impl BrokerNet {
     pub fn new(broker: Arc<dyn crate::broker::Broker>, document: Option<Url>) -> Self {
-        Self { broker, document }
+        Self::with_log(broker, document, ResourceLog::default())
+    }
+
+    pub fn with_log(
+        broker: Arc<dyn crate::broker::Broker>,
+        document: Option<Url>,
+        resources: ResourceLog,
+    ) -> Self {
+        Self {
+            broker,
+            document,
+            resources,
+        }
     }
 }
 
@@ -2572,6 +2636,10 @@ impl NetProvider for BrokerNet {
         let outcome =
             self.broker
                 .fetch_from(&request.url, Initiator::Subresource, self.document.as_ref());
+
+        if let Ok(mut log) = self.resources.lock() {
+            log.record(&request.url, &outcome);
+        }
 
         // The single exit. A denied or failed request completes with an empty
         // body: Blitz counts the resource as resolved and paints, having
@@ -2614,6 +2682,65 @@ mod tests {
             self.body_len.store(bytes.len() as u64, Ordering::SeqCst);
             self.called.store(true, Ordering::SeqCst);
         }
+    }
+
+    /// The table the page's `load` and `error` events are read from.
+    ///
+    /// h5i-dev/h5i#610. Keyed by both URLs because a redirected image is `src`
+    /// in the markup and the final URL in the outcome, and the page will ask
+    /// about the first.
+    #[test]
+    fn a_subresource_outcome_is_recorded_under_both_of_its_urls() {
+        let mut outcomes = ResourceOutcomes::default();
+        assert!(outcomes.is_empty());
+
+        let asked = url("https://cdn.test/a.png");
+        let mut ok = FetchOutcome::failed(url("https://cdn.test/b.png"), String::new());
+        ok.error = None;
+        ok.status = Some(200);
+        outcomes.record(&asked, &ok);
+        assert_eq!(outcomes.status(asked.as_str()), Some(200));
+        assert_eq!(outcomes.status("https://cdn.test/b.png"), Some(200));
+
+        // A URL nobody asked for is `None`, not `0`: "never fetched" and
+        // "fetched and got nothing" are different answers, and only the second
+        // is an `error` for the page.
+        assert_eq!(outcomes.status("https://cdn.test/never.png"), None);
+
+        // A refusal and a connection failure are both `0`. Which one it was is
+        // in the receipt.
+        let refused = url("https://blocked.test/x.png");
+        outcomes.record(
+            &refused,
+            &FetchOutcome::refused(refused.clone(), "denied by policy".to_string()),
+        );
+        assert_eq!(outcomes.status(refused.as_str()), Some(0));
+    }
+
+    /// Every subresource Blitz fetches is recorded on its way through, whether
+    /// it arrived or not — the whole point being that a denial is an `error`
+    /// the page hears rather than a silence it cannot distinguish from success.
+    #[test]
+    fn the_blitz_adapter_records_what_each_subresource_came_back_as() {
+        let sink = Arc::new(MemorySink::new());
+        let broker = broker_with(Policy::new(), sink);
+        let log = ResourceLog::default();
+        let net = BrokerNet::with_log(broker, Some(url("https://denied.test/")), log.clone());
+
+        net.fetch(
+            0,
+            Request::get(url("https://tracker.test/pixel.gif")),
+            Box::new(SpyHandler {
+                called: Arc::new(AtomicBool::new(false)),
+                body_len: Arc::new(AtomicU64::new(0)),
+            }),
+        );
+
+        assert_eq!(
+            log.lock().expect("log").status("https://tracker.test/pixel.gif"),
+            Some(0),
+            "a refused subresource is one the page must be able to hear about"
+        );
     }
 
     #[test]

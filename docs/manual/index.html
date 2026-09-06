@@ -162,6 +162,7 @@
 <a class="t3" href="#--in-box-the-same-session-inside-a-box">--in &lt;box&gt;: the same session, inside a box</a>
 <a class="t3" href="#opening-a-session-from-inside-a-box">Opening a session from inside a box</a>
 <a class="t3" href="#reading-and-acting-beyond-snapshot-and-click">Reading and acting, beyond snapshot and click</a>
+<a class="t3" href="#when-the-page-acts-on-its-own">When the page acts on its own</a>
 </div>
 <a class="t2" href="#video-transcripts">Video transcripts</a>
 <div class="t3group">
@@ -426,8 +427,8 @@ next verb quietly landing somewhere it never asked for.</p>
 <p>Opening a URL in a browser that is already up means <em>go there</em>. So <code>open</code>
 navigates the session it finds, and <code>--new</code> is how you say you meant a second
 one. The flags that only make sense at creation (<code>--allow</code>, <code>--in</code>, <code>--script</code>,
-<code>--no-loopback</code>, <code>--expires-in</code>, <code>--restore</code>, <code>--capture</code>) are <em>refused</em> rather than ignored
-when a session is reused: a session's policy is fixed when its engine starts, so
+<code>--no-loopback</code>, <code>--permissive-cors</code>, <code>--expires-in</code>, <code>--restore</code>, <code>--capture</code>) are <em>refused</em>
+rather than ignored when a session is reused: a session's policy is fixed when its engine starts, so
 accepting a grant and doing nothing with it would be a grant the caller believes
 it made.</p>
 <h3 id="what-is-true-by-default">What is true by default</h3>
@@ -454,6 +455,28 @@ that back.</p>
 <p>The grant is the page and not "and whatever this page pulls in". An off-origin
 subresource is still refused, and still says so in the request log, which is the
 part a wider default would have given away.</p>
+<h4 id="cross-site-credentials-and-the-one-flag-that-changes-them">Cross-site credentials, and the one flag that changes them</h4>
+<p>A page here may not send this session's credentials to another origin on a
+request whose answer nobody can read. In fetch terms that is <code>mode: "no-cors"</code>
+with <code>credentials: "include"</code>, and h5i refuses it: an opaque response cannot be
+checked, so nothing could ever show the server agreed.</p>
+<p>That is the right default for containing an agent and the wrong one for testing
+a target, because the shape being refused is the classic POST-based CSRF. With
+the refusal in force h5i cannot act as the <em>victim</em>, so a negative result means
+"h5i declined", not "the target is safe".</p>
+<p><code>--permissive-cors</code> makes one session behave like a browser here:</p>
+<pre><code class="language-bash">h5i browser open https://attacker.example --script --permissive-cors
+</code></pre>
+<p>It is scoped to that session, part of its policy digest, and named on the <code>open</code>
+banner and in <code>h5i browser status</code>, so nobody is in it by accident and no
+finding gathered under it can be mistaken for one gathered without it. It widens
+exactly that: a cross-origin <code>cors</code> read still has to be permitted by the server,
+and <code>mode: "same-origin"</code> still refuses to cross.</p>
+<p>One thing it does not do is put a credential where there was not one. The cookie
+jar holds the session for the origin currently loaded and drops the rest on
+navigation, so a cross-host attack page has nothing of the target's to send.
+Two ports on one host are two origins and one jar, which is the shape a local
+CSRF lab has.</p>
 <h3 id="browser-identities">Browser identities</h3>
 <p>A session uses one identity for HTTP headers, JavaScript, screen geometry, locale,
 and time zone. The identity is fixed when the session opens and recorded in its
@@ -611,6 +634,23 @@ media: 1 element(s), 1 with timed text, 412 cue(s) read
 …
 --- END UNTRUSTED PAGE CONTENT ---
 </code></pre>
+<h3 id="when-the-page-acts-on-its-own">When the page acts on its own</h3>
+<p>With <code>--script</code>, a page can move the ground under a verb, and both ways it can
+are reported rather than left to be inferred.</p>
+<p><strong>A form the page submits itself.</strong> <code>form.submit()</code> from a handler, or a form
+that submits on load, produces a real request. It is not sent from inside the
+page, because this engine drives navigation through its own verbs so that an
+agent and a receipt both see it. It goes out at the verb boundary instead,
+through the broker and into the request log like any other. The reply carries
+<code>page_submitted</code> with where it went, and the session has landed on the answer by
+then, so take a new <code>snapshot</code>: every <code>@ref</code> you hold describes the page that is
+gone.</p>
+<p><strong><code>load</code> and <code>error</code> on subresources.</strong> An <code>&lt;img&gt;</code>, <code>&lt;script&gt;</code>, <code>&lt;link&gt;</code> or
+<code>&lt;iframe&gt;</code> that did or did not arrive fires at the element that asked for it, so
+<code>&lt;img src=x onerror=…&gt;</code> and <code>&lt;svg onload=…&gt;</code> behave the way they do in a
+browser. An element whose only interactivity is a handler attribute, such as
+<code>&lt;div onclick=…&gt;</code>, reads as role <code>clickable</code> and takes a <code>@ref</code>, which is how
+you fire one.</p>
 <h2 id="video-transcripts">Video transcripts</h2>
 <p><code>snapshot</code> and <code>markdown</code> describe a media element but do not decode its
 audio. Use <code>transcript</code> to read caption tracks declared by the page:</p>

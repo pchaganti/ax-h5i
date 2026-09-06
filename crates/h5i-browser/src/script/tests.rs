@@ -3767,7 +3767,18 @@ fn code_bytes(source: &str) -> usize {
 fn the_eagerly_parsed_prelude_stays_within_its_budget() {
     // Force prelude growth to be reviewed; move optional APIs into `TIERS` when
     // possible. This is a size budget, not a stable performance benchmark.
-    const BUDGET_KIB: usize = 281;
+    //
+    // Raised from 281 for the two capabilities in h5i-dev/h5i#609/#610/#611:
+    // the sweep that delivers `load` and `error` to the elements that asked for
+    // a subresource, and the hand-off that turns `form.submit()` into a real
+    // request. Neither can live in a tier — the first runs on every page that
+    // has an image and the second on every page that has a form — and both are
+    // load-bearing for a security tool: without them `<img src=x onerror=…>`
+    // and a POST flow are silent, which reads as a clean result. The encoding
+    // half of the submission is deliberately in Rust rather than here, so what
+    // the page pays for is the entry list and the hand-off, not three
+    // enctypes.
+    const BUDGET_KIB: usize = 283;
 
     assert!(
         !super::PRELUDE.contains("/*"),
@@ -7275,4 +7286,191 @@ fn assigning_the_width_clears_the_surface() {
         rendered.contains("blank=true"),
         "and what is left must be an empty surface:\n{rendered}"
     );
+}
+
+// ── the two payload shapes an XSS test is written in ─────────────────────────
+//
+// h5i-dev/h5i#609 and #610. The events were never dispatched, so
+// `<img src=x onerror=…>` and `<svg onload=…>` did nothing here — a real
+// finding read as no finding, which is the worst failure a security tool has.
+
+/// A subresource that did not arrive fires `error` on the element that asked.
+///
+/// The policy in these tests grants nothing, so the fetch is refused and the
+/// element hears about it. That is the same path a 404 takes: what the page
+/// gets told is "this did not load", and which of the two it was lives in the
+/// receipt, where it belongs.
+#[test]
+fn a_subresource_that_failed_fires_error_on_the_element_that_asked() {
+    let (page, _broker) = run_page(
+        "<html><body><div id='out'>nothing</div>\
+         <img src='https://cdn.example/missing.png' \
+              onerror=\"document.getElementById('out').textContent = 'img fired error'\">\
+         </body></html>",
+    );
+    let rendered = page.snapshot().render();
+    assert!(
+        rendered.contains("img fired error"),
+        "an `<img>` that did not load must fire `error`:\n{rendered}"
+    );
+}
+
+/// The same fact through `addEventListener`, which is the half of #610 that is
+/// not about inline attributes at all: a page branching on whether an image
+/// arrived took the wrong branch however it listened.
+#[test]
+fn a_subresource_failure_reaches_an_added_listener_too() {
+    let (page, _broker) = run_page(
+        "<html><body><div id='out'>nothing</div>\
+         <img id='i' src='https://cdn.example/missing.png'>\
+         <script>\
+           document.getElementById('i').addEventListener('error', () => {\
+             document.getElementById('out').textContent = 'listener saw the error';\
+           });\
+         </script></body></html>",
+    );
+    let rendered = page.snapshot().render();
+    assert!(
+        rendered.contains("listener saw the error"),
+        "`addEventListener('error')` must hear it too:\n{rendered}"
+    );
+}
+
+/// `<svg onload=…>`, which waits on no resource of its own and so is the one
+/// shape no amount of subresource bookkeeping would have reached.
+#[test]
+fn an_svg_fires_load_once_it_is_in_the_document() {
+    let (page, _broker) = run_page(
+        "<html><body><div id='out'>nothing</div>\
+         <svg onload=\"document.getElementById('out').textContent = 'svg fired load'\"></svg>\
+         </body></html>",
+    );
+    let rendered = page.snapshot().render();
+    assert!(
+        rendered.contains("svg fired load"),
+        "`<svg onload>` is half the XSS payload vocabulary:\n{rendered}"
+    );
+}
+
+/// An element fires once per URL it holds, so a second pass is free and a
+/// changed `src` arms it again — which is what a browser does.
+#[test]
+fn a_resource_event_fires_once_per_url() {
+    let (page, _broker) = run_page(
+        "<html><body><div id='out'></div>\
+         <img id='i' src='https://cdn.example/a.png'>\
+         <script>\
+           let count = 0;\
+           document.getElementById('i').addEventListener('error', () => {\
+             count += 1;\
+             document.getElementById('out').textContent = 'errors=' + count;\
+           });\
+         </script></body></html>",
+    );
+    let rendered = page.snapshot().render();
+    assert!(
+        rendered.contains("errors=1"),
+        "one failed load is one event, however many passes deliver it:\n{rendered}"
+    );
+}
+
+// ── forms that submit themselves ─────────────────────────────────────────────
+
+/// `form.submit()` produces a request. h5i-dev/h5i#611.
+///
+/// It used to build the entry list and drop it on the floor, so a POST-based
+/// flow could not be driven at all and a POST CSRF could not be demonstrated
+/// end to end. The request is left for the session to send rather than sent
+/// from inside the realm — see [`crate::engine::NavigationSlot`] — so this
+/// reads the slot rather than the wire.
+#[test]
+fn form_submit_from_script_produces_the_request() {
+    let (mut page, _broker) = run_page(
+        "<html><body>\
+         <form id='f' method='POST' action='/submitted'><input name='x' value='1'></form>\
+         <script>document.getElementById('f').submit();</script>\
+         </body></html>",
+    );
+    let submission = page
+        .take_pending_submission()
+        .expect("`form.submit()` must produce a request");
+    assert_eq!(submission.method, "POST");
+    assert_eq!(submission.url.as_str(), "https://app.example/submitted");
+    assert_eq!(String::from_utf8_lossy(&submission.body), "x=1");
+    assert_eq!(
+        submission.content_type.as_deref(),
+        Some("application/x-www-form-urlencoded")
+    );
+}
+
+/// A `GET` form puts its fields in the query and *replaces* whatever the
+/// action carried, which is the part of the algorithm that surprises people.
+#[test]
+fn a_get_form_submits_through_the_query() {
+    let (mut page, _broker) = run_page(
+        "<html><body>\
+         <form id='f' action='/search?stale=yes'><input name='q' value='hello world'></form>\
+         <script>document.getElementById('f').submit();</script>\
+         </body></html>",
+    );
+    let submission = page.take_pending_submission().expect("a request");
+    assert_eq!(submission.method, "GET");
+    assert_eq!(
+        submission.url.as_str(),
+        "https://app.example/search?q=hello+world"
+    );
+    assert!(submission.body.is_empty());
+}
+
+/// `requestSubmit` fires a cancelable `submit` first, and a listener that
+/// prevents it stops the request. The difference from `submit()` is the whole
+/// reason they are two functions.
+#[test]
+fn a_prevented_submit_event_stops_the_request() {
+    let (mut page, _broker) = run_page(
+        "<html><body>\
+         <form id='f' method='POST' action='/submitted'><input name='x' value='1'>\
+         <button id='b' type='submit'>go</button></form>\
+         <script>\
+           document.getElementById('f').addEventListener('submit', (e) => e.preventDefault());\
+           document.getElementById('b').click();\
+         </script></body></html>",
+    );
+    assert!(
+        page.take_pending_submission().is_none(),
+        "`preventDefault` on `submit` must stop the request"
+    );
+}
+
+/// ...and without the listener, clicking the button submits, because that is
+/// the button's activation behaviour rather than something the verb layer adds.
+#[test]
+fn clicking_a_submit_button_from_script_submits() {
+    let (mut page, _broker) = run_page(
+        "<html><body>\
+         <form id='f' method='POST' action='/submitted'><input name='x' value='1'>\
+         <button id='b' type='submit' name='go' value='now'>go</button></form>\
+         <script>document.getElementById('b').click();</script>\
+         </body></html>",
+    );
+    let submission = page.take_pending_submission().expect("a request");
+    assert_eq!(
+        String::from_utf8_lossy(&submission.body),
+        "x=1&go=now",
+        "the submitter is an entry: a server has to be able to tell which button was pressed"
+    );
+}
+
+/// An action this engine does not submit over is refused where the request is
+/// built, rather than becoming a navigation nobody expected.
+#[test]
+fn a_form_with_a_scheme_this_engine_does_not_submit_produces_nothing() {
+    let (mut page, _broker) = run_page(
+        "<html><body>\
+         <form id='f' method='POST' action='mailto:someone@example.com'>\
+         <input name='x' value='1'></form>\
+         <script>document.getElementById('f').submit();</script>\
+         </body></html>",
+    );
+    assert!(page.take_pending_submission().is_none());
 }
