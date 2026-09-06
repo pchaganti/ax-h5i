@@ -81,12 +81,8 @@ and register it in the same pass:
 
 ```bash
 curl -fsSL https://h5i.dev/install.sh | sh -s -- --websec
+# h5i plugin install               # says what is installed
 ```
-
-The plugin is a separate executable, so it does not go on your `PATH`: the
-installer hands it to `h5i plugin install`, which keeps it in h5i's own state
-directory. After that `h5i websec` works, and `h5i plugin list` says what is
-installed.
 
 ---
 
